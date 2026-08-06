@@ -36,8 +36,14 @@
   "Friendly name of the QBO company we expect to be authorised against."
   :type 'string :group 'invoice-qbo)
 
-(defcustom invoice-qbo-redirect-uri "http://localhost:8080/callback"
-  "OAuth redirect URI. Must match the one registered for the QBO app."
+(defcustom invoice-qbo-redirect-uri "https://reportcraft.com.au/emacs-oauth"
+  "OAuth redirect URI. Must match one registered for the QBO app exactly.
+Intuit rejects localhost and plain http for production keys, so this
+points at a path that does not exist in the ReportCraft Rails app: the
+browser lands on a 404 with the auth code still in the address bar, and
+nothing server-side consumes the code before we exchange it here.
+Do not reuse /oauth2-redirect — companies#oauth2_redirect swaps the code
+for tokens itself, and the code is single-use."
   :type 'string :group 'invoice-qbo)
 
 (defcustom invoice-qbo-environment 'production
@@ -52,6 +58,47 @@
 (defcustom invoice-qbo-gst-rate 0.10
   "GST rate. 0.10 = 10%."
   :type 'number :group 'invoice-qbo)
+
+(defcustom invoice-qbo-terms-name "Net 30"
+  "Name of the QBO Term to put on the invoice.
+Matched case-insensitively, and tried before `invoice-qbo-terms-days'."
+  :type 'string :group 'invoice-qbo)
+
+(defcustom invoice-qbo-terms-days 30
+  "Payment terms in days.  Matched against a QBO Term with these DueDays.
+If no such Term exists, `DueDate' is set to this many days out instead."
+  :type 'integer :group 'invoice-qbo)
+
+(defcustom invoice-qbo-set-doc-number t
+  "When non-nil, set DocNumber to the highest existing number plus one.
+When nil, QBO assigns the invoice number itself."
+  :type 'boolean :group 'invoice-qbo)
+
+(defcustom invoice-qbo-minor-version "75"
+  "QBO API minor version sent with every request.
+Without one QBO answers with a very old schema in which the online
+payment flags do not exist, so they are silently dropped."
+  :type 'string :group 'invoice-qbo)
+
+(defcustom invoice-qbo-online-payment-flags
+  '(:AllowOnlinePayPalPayment t :AllowOnlinePayment t)
+  "Online payment flags merged into the invoice payload.
+`AllowOnlinePayPalPayment' is the tick box labelled \"Accept card
+payments with PayPal\" on an AU company file.  It is absent from the
+public Invoice docs — it showed up in `invoice-qbo-dump-invoice' output
+alongside AllowOnlineAffirmPayment.  AllowOnlineCreditCardPayment and
+AllowOnlineACHPayment refer to Intuit's own Payments service and are
+forced back to false on a file that uses PayPal instead."
+  :type '(plist :value-type boolean) :group 'invoice-qbo)
+
+;; defcustom won't overwrite an already-bound value, so re-apply these
+;; for a running Emacs that loaded an older version of this file.
+(setq invoice-qbo-terms-name "Net 30")
+(setq invoice-qbo-terms-days 30)
+(setq invoice-qbo-set-doc-number t)
+(setq invoice-qbo-minor-version "75")
+(setq invoice-qbo-online-payment-flags
+      '(:AllowOnlinePayPalPayment t :AllowOnlinePayment t))
 
 (defcustom invoice-qbo-token-file
   (expand-file-name ".invoice-qbo-tokens.el" user-emacs-directory)
@@ -77,13 +124,34 @@
       "https://sandbox-quickbooks.api.intuit.com"
     "https://quickbooks.api.intuit.com"))
 
+(defun invoice-qbo--getenv (var)
+  "Return VAR from the environment, re-reading the shell env files if unset."
+  (or (if (fboundp 'shell-env-getenv) (shell-env-getenv var) (getenv var))
+      (user-error "Env var %s not set (check %s)" var
+                  (if (boundp 'shell-env-files)
+                      (string-join shell-env-files ", ")
+                    "your shell environment"))))
+
+(defun invoice-qbo-show-config ()
+  "Show what this session will actually send to Intuit.
+Values live in `defcustom's, so reloading this file does not update
+them in a running Emacs — use \\[customize-set-variable] or `setq'."
+  (interactive)
+  (let ((id (getenv invoice-qbo-client-id-env)))
+    (message
+     (concat "redirect_uri: %s\nclient_id: %s (%s)\nenvironment: %s\n"
+             "The redirect_uri must appear verbatim under the app's %s keys.")
+     invoice-qbo-redirect-uri
+     (if id (concat (substring id 0 (min 8 (length id))) "…") "UNSET")
+     invoice-qbo-client-id-env
+     invoice-qbo-environment
+     (if (eq invoice-qbo-environment 'sandbox) "Development" "Production"))))
+
 (defun invoice-qbo--client-id ()
-  (or (getenv invoice-qbo-client-id-env)
-      (user-error "Env var %s not set" invoice-qbo-client-id-env)))
+  (invoice-qbo--getenv invoice-qbo-client-id-env))
 
 (defun invoice-qbo--client-secret ()
-  (or (getenv invoice-qbo-client-secret-env)
-      (user-error "Env var %s not set" invoice-qbo-client-secret-env)))
+  (invoice-qbo--getenv invoice-qbo-client-secret-env))
 
 ;;; -------------------------------------------------------------------
 ;;; Persistence
@@ -170,6 +238,19 @@
                               (plist-get invoice-qbo--tokens :realm-id)))))
   (invoice-qbo--save-tokens))
 
+(defun invoice-qbo--parse-callback (input)
+  "Parse INPUT into an alist of callback parameters.
+Accepts a full redirect URL, a scheme-less one, or a bare query string,
+with or without surrounding whitespace and a trailing #fragment."
+  (let* ((s (string-trim input))
+         (query (cond
+                 ((string-match "\\`[^?]*\\?\\(.*\\)\\'" s) (match-string 1 s))
+                 ;; A bare "code=...&state=..." paste.
+                 ((string-match-p "=" s) s))))
+    (when query
+      (mapcar (lambda (pair) (cons (car pair) (cadr pair)))
+              (url-parse-query-string (car (split-string query "#")))))))
+
 (defun invoice-qbo-authorize ()
   "Run the OAuth authorization-code flow interactively.
 Opens a browser; user pastes the redirected URL back into Emacs."
@@ -184,19 +265,25 @@ Opens a browser; user pastes the redirected URL back into Emacs."
                      ("redirect_uri"  . ,invoice-qbo-redirect-uri)
                      ("state"         . ,state))))))
     (browse-url auth-url)
-    (message "Opened browser. Sign in to %s and authorize." invoice-qbo-company-name)
+    (message "Opened browser. Authorize %s, then copy the URL of the 404 page you land on."
+             invoice-qbo-company-name)
     (let* ((redirected
             (read-string
              "Paste the full URL you were redirected to: "))
-           (q (cdr (url-path-and-query (url-generic-parse-url redirected))))
-           (params (when q (url-parse-query-string q)))
-           (code   (cadr (assoc "code"    params)))
-           (rstate (cadr (assoc "state"   params)))
-           (realm  (cadr (assoc "realmId" params))))
-      (unless code  (user-error "No code in callback URL"))
-      (unless realm (user-error "No realmId in callback URL"))
+           (params (invoice-qbo--parse-callback redirected))
+           (code   (cdr (assoc "code"    params)))
+           (rstate (cdr (assoc "state"   params)))
+           (realm  (cdr (assoc "realmId" params)))
+           (seen   (if params
+                       (mapconcat #'car params ", ")
+                     "none — what you pasted had no query string at all")))
+      (when-let ((err (cdr (assoc "error" params))))
+        (user-error "Intuit refused the authorization: %s %s" err
+                    (or (cdr (assoc "error_description" params)) "")))
+      (unless code  (user-error "No `code' in the pasted URL. Parameters seen: %s" seen))
+      (unless realm (user-error "No `realmId' in the pasted URL. Parameters seen: %s" seen))
       (unless (string= rstate state)
-        (user-error "OAuth state mismatch — abort"))
+        (user-error "OAuth state mismatch — expected %s, got %s" state rstate))
       (let ((data (invoice-qbo--token-request
                    `(("grant_type"   . "authorization_code")
                      ("code"         . ,code)
@@ -231,13 +318,18 @@ Opens a browser; user pastes the redirected URL back into Emacs."
 ;;; -------------------------------------------------------------------
 ;;; HTTP
 
-(defun invoice-qbo--request (method path &optional body params)
+(defun invoice-qbo--request (method path &optional body params as-text)
   "METHOD = \"GET\"/\"POST\". PATH joined under /v3/company/{realm}/.
 BODY is an alist/plist for JSON; PARAMS is an alist for the query string.
-Returns parsed response as a plist."
+Returns the parsed response as a plist, or the raw body when AS-TEXT is
+non-nil — re-encoding a parsed response mangles JSON arrays, so anything
+displaying a record verbatim wants the text."
   (invoice-qbo--ensure-token)
   (let* ((realm (or (plist-get invoice-qbo--tokens :realm-id)
                     (user-error "No realm id — re-authorize")))
+         (params (append params
+                         (when invoice-qbo-minor-version
+                           `(("minorversion" . ,invoice-qbo-minor-version)))))
          (qs (when params (concat "?" (invoice-qbo--urlencode params))))
          (url (format "%s/v3/company/%s/%s%s"
                       (invoice-qbo--api-base) realm path (or qs "")))
@@ -263,15 +355,17 @@ Returns parsed response as a plist."
           (cond
            ((and code (= code 401))
             (invoice-qbo--refresh)
-            (invoice-qbo--request method path body params))
+            (invoice-qbo--request method path body params as-text))
            ((and code (>= code 400))
             (error "QBO %s %s -> %d: %s" method path code raw))
            ((string-empty-p (string-trim raw)) nil)
+           (as-text raw)
            (t (json-read-from-string raw))))))))
 
-(defun invoice-qbo--query (sql)
-  "Run a QBO SQL-like query and return the parsed result."
-  (invoice-qbo--request "GET" "query" nil `(("query" . ,sql))))
+(defun invoice-qbo--query (sql &optional as-text)
+  "Run a QBO SQL-like query and return the parsed result.
+With AS-TEXT, return the response body as it arrived."
+  (invoice-qbo--request "GET" "query" nil `(("query" . ,sql)) as-text))
 
 ;;; -------------------------------------------------------------------
 ;;; Lookups (customer / item / tax code) with caching
@@ -348,6 +442,289 @@ Returns parsed response as a plist."
         (setq invoice-qbo--cache (plist-put invoice-qbo--cache :tax-code-name pick))
         (invoice-qbo--save-cache)
         id)))
+
+(defun invoice-qbo--customer-email (customer-id)
+  "Return the primary email on CUSTOMER-ID's QBO record, or nil.
+Read fresh each time rather than cached, so an address corrected in QBO
+is picked up on the next invoice."
+  (let* ((rows (invoice-qbo--all-rows
+                (invoice-qbo--query
+                 (format "SELECT Id, PrimaryEmailAddr FROM Customer WHERE Id = '%s'"
+                         customer-id))
+                :Customer))
+         (address (plist-get (plist-get (car rows) :PrimaryEmailAddr) :Address)))
+    (when (and (stringp address) (not (string-empty-p address)))
+      address)))
+
+(defconst invoice-qbo--no-term "none"
+  "Cached `:term-id' meaning \"this file has no usable Term, use DueDate\".")
+
+(defun invoice-qbo--terms ()
+  "Return the active Terms defined in the company file."
+  (invoice-qbo--all-rows
+   (invoice-qbo--query
+    "SELECT Id, Name, DueDays FROM Term WHERE Active = true MAXRESULTS 100")
+   :Term))
+
+(defun invoice-qbo--term-days (term)
+  "Return TERM's DueDays as a number, coping with it arriving as a string."
+  (let ((days (plist-get term :DueDays)))
+    (cond ((numberp days) days)
+          ((stringp days) (string-to-number days)))))
+
+(defconst invoice-qbo--payment-fields
+  '(:AllowOnlinePayPalPayment :AllowOnlinePayment :AllowOnlineCreditCardPayment
+    :AllowIPNPayment :AllowOnlineACHPayment :AllowOnlineAffirmPayment)
+  "Invoice fields that between them drive the online-payment tick boxes.")
+
+(defun invoice-qbo--show-json (title text)
+  "Display TEXT, a raw JSON string, pretty-printed in a buffer named TITLE."
+  (let ((buf (get-buffer-create title)))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert text)
+        (json-pretty-print-buffer)
+        (goto-char (point-min))
+        (when (fboundp 'js-mode) (js-mode))
+        (view-mode 1)))
+    (display-buffer buf)))
+
+(defun invoice-qbo-dump-invoice (doc-number)
+  "Show the raw QBO record for the invoice numbered DOC-NUMBER.
+Use this to compare an invoice created in the QBO web UI with the
+\"Accept card payments\" box ticked against one created from here: the
+field that differs is the one that drives the box."
+  (interactive "sInvoice number: ")
+  (let* ((sql (format "SELECT * FROM Invoice WHERE DocNumber = '%s'" doc-number))
+         (inv (car (invoice-qbo--all-rows (invoice-qbo--query sql) :Invoice))))
+    (unless inv (user-error "No invoice numbered %s in this company file" doc-number))
+    (message "#%s payment fields: %s"
+             doc-number
+             (mapconcat (lambda (field)
+                          (format "%s=%S" (substring (symbol-name field) 1)
+                                  (plist-get inv field)))
+                        invoice-qbo--payment-fields "  "))
+    (invoice-qbo--show-json (format "*invoice-qbo #%s*" doc-number)
+                            (invoice-qbo--query sql t))))
+
+(defun invoice-qbo-enable-paypal (doc-number)
+  "Turn on the online payment flags for the existing invoice DOC-NUMBER.
+Sends a sparse update, then reads the invoice back and reports what QBO
+actually stored — which is the test of whether the flags are settable
+through the API on this company file at all."
+  (interactive "sInvoice number: ")
+  (let* ((sql (format "SELECT * FROM Invoice WHERE DocNumber = '%s'" doc-number))
+         (inv (car (invoice-qbo--all-rows (invoice-qbo--query sql) :Invoice))))
+    (unless inv (user-error "No invoice numbered %s in this company file" doc-number))
+    (invoice-qbo--request
+     "POST" "invoice"
+     (append `(:Id ,(plist-get inv :Id)
+               :SyncToken ,(plist-get inv :SyncToken)
+               :sparse t)
+             (copy-sequence invoice-qbo-online-payment-flags)))
+    (let ((after (car (invoice-qbo--all-rows (invoice-qbo--query sql) :Invoice))))
+      (message "#%s now: %s"
+               doc-number
+               (mapconcat (lambda (field)
+                            (format "%s=%S" (substring (symbol-name field) 1)
+                                    (plist-get after field)))
+                          invoice-qbo--payment-fields "  ")))))
+
+(defun invoice-qbo--invoice-by-number (doc-number)
+  "Return the QBO invoice record numbered DOC-NUMBER."
+  (car (invoice-qbo--all-rows
+        (invoice-qbo--query
+         (format "SELECT * FROM Invoice WHERE DocNumber = '%s'" doc-number))
+        :Invoice)))
+
+(defun invoice-qbo-probe-payment-flags (doc-number)
+  "Set each online payment flag on invoice DOC-NUMBER one at a time.
+After each sparse update the invoice is read back, so the report says
+which flags QBO actually stores rather than which it merely accepts.
+The invoice is left with whichever flags stuck."
+  (interactive "sInvoice number: ")
+  (let (results)
+    (dolist (field invoice-qbo--payment-fields)
+      (let ((inv (invoice-qbo--invoice-by-number doc-number)))
+        (unless inv (user-error "No invoice numbered %s" doc-number))
+        ;; SyncToken moves with every accepted update, so re-read it each time.
+        (invoice-qbo--request
+         "POST" "invoice"
+         (list :Id (plist-get inv :Id)
+               :SyncToken (plist-get inv :SyncToken)
+               :sparse t
+               field t))
+        (push (cons field (plist-get (invoice-qbo--invoice-by-number doc-number)
+                                     field))
+              results)))
+    (with-output-to-temp-buffer "*invoice-qbo payment flags*"
+      (princ (format "Invoice #%s, minorversion %s\n"
+                     doc-number invoice-qbo-minor-version))
+      (princ "Each flag set on its own, then read back:\n\n")
+      (dolist (r (nreverse results))
+        (princ (format "  %-32s -> %s\n"
+                       (substring (symbol-name (car r)) 1)
+                       (if (eq (cdr r) t) "STORED true" "refused")))))))
+
+(defun invoice-qbo-check-settings ()
+  "Report the QBO company settings that govern terms and invoice numbers.
+QBO silently ignores a DocNumber we send unless \"Custom transaction
+numbers\" is switched on under Account and settings > Sales."
+  (interactive)
+  (let* ((prefs (car (invoice-qbo--all-rows
+                      (invoice-qbo--query "SELECT * FROM Preferences")
+                      :Preferences)))
+         (sales (plist-get prefs :SalesFormsPrefs))
+         (custom-numbers (plist-get sales :CustomTxnNumbers))
+         (default-terms (plist-get sales :DefaultTerms))
+         (payments (plist-get sales :ETransactionPaymentEnabled))
+         (rows (invoice-qbo--terms)))
+    (with-output-to-temp-buffer "*invoice-qbo settings*"
+      ;; AllowOnlinePayPalPayment is only writable when this is on AND the
+      ;; company has an active PayPal subscription.  Without it QBO accepts
+      ;; the flag and stores false, which is what we kept seeing.
+      (princ (format "ETransactionPaymentEnabled: %s\n"
+                     (if (eq payments t)
+                         "ON — the PayPal tick box is settable from here"
+                       (concat "OFF — QBO will refuse AllowOnlinePayPalPayment.\n"
+                               "    Enable online payments on the company and "
+                               "onboard PayPal\n    with an ACTIVE subscription, "
+                               "then the flag starts working."))))
+      (princ (format "Custom transaction numbers: %s\n"
+                     (if (eq custom-numbers t)
+                         "ON — DocNumber we send is honoured"
+                       (concat "OFF — QBO assigns invoice numbers itself and "
+                               "ignores ours.\n    Turn it on at Account and "
+                               "settings > Sales > Sales form content."))))
+      ;; DefaultTerms arrives as a bare {"value": "4"} reference, so the
+      ;; name has to come from the Term list.
+      (princ (format "Company default terms: %s\n"
+                     (let ((id (plist-get default-terms :value)))
+                       (or (plist-get default-terms :name)
+                           (cl-loop for tm in rows
+                                    when (equal (plist-get tm :Id) id)
+                                    return (format "%s (Id %s)"
+                                                   (plist-get tm :Name) id))
+                           "none"))))
+      (princ (format "\nWanted term: %S (or %d days)\n"
+                     invoice-qbo-terms-name invoice-qbo-terms-days))
+      (if rows
+          (dolist (tm rows)
+            (princ (format "  Id %-4s  DueDays %-6s  %s\n"
+                           (plist-get tm :Id)
+                           (or (plist-get tm :DueDays) "—")
+                           (plist-get tm :Name))))
+        (princ "  No active terms in this company file.\n"))
+      (princ (format "\nNext invoice number we would use: %s\n"
+                     (invoice-qbo--next-doc-number)))
+      (princ "\nSales form preferences (payment-related keys named here):\n")
+      ;; Printed from the raw body: re-encoding the parsed response turns
+      ;; JSON arrays into objects with repeated keys.
+      (princ (with-temp-buffer
+               (insert (or (invoice-qbo--query "SELECT * FROM Preferences" t) ""))
+               (json-pretty-print-buffer)
+               (buffer-string))))))
+
+(defun invoice-qbo-list-terms ()
+  "Show the Terms defined in the QBO company file."
+  (interactive)
+  (let ((rows (invoice-qbo--terms)))
+    (with-output-to-temp-buffer "*invoice-qbo terms*"
+      (princ (format "Looking for a term of %d days.\n\n" invoice-qbo-terms-days))
+      (if rows
+          (dolist (tm rows)
+            (princ (format "  Id %-4s  DueDays %-6s  %s\n"
+                           (plist-get tm :Id)
+                           (or (plist-get tm :DueDays) "—")
+                           (plist-get tm :Name))))
+        (princ "  No active terms in this company file.\n")))))
+
+(defun invoice-qbo--pick-term ()
+  "Return the Id of the QBO Term to bill against.
+Tried in order: the name in `invoice-qbo-terms-name', a term whose
+DueDays is `invoice-qbo-terms-days', then the day count appearing in a
+term's name (\"Net 30\", \"30 days\").  Falls back to asking, since a
+wrong guess here silently leaves the Terms field blank on the invoice.
+Returns nil when there is no usable term, and the caller sets DueDate."
+  (invoice-qbo--load-cache-once)
+  (let ((cached (plist-get invoice-qbo--cache :term-id)))
+    (if cached
+        (unless (equal cached invoice-qbo--no-term) cached)
+      (let* ((rows (invoice-qbo--terms))
+             (days invoice-qbo-terms-days)
+             (name-re (format "\\b%d\\b" days))
+             (match
+              (or (cl-find-if (lambda (tm)
+                                (string-equal-ignore-case
+                                 (or (plist-get tm :Name) "")
+                                 invoice-qbo-terms-name))
+                              rows)
+                  (cl-find-if (lambda (tm) (eql (invoice-qbo--term-days tm) days)) rows)
+                  (cl-find-if (lambda (tm)
+                                (string-match-p name-re (or (plist-get tm :Name) "")))
+                              rows)))
+             (id (cond
+                  (match (plist-get match :Id))
+                  ;; Nothing matched but terms exist — let the user say which.
+                  (rows
+                   (let* ((choices
+                           (append
+                            (mapcar (lambda (tm)
+                                      (cons (format "%s (DueDays %s)"
+                                                    (plist-get tm :Name)
+                                                    (or (plist-get tm :DueDays) "—"))
+                                            (plist-get tm :Id)))
+                                    rows)
+                            (list (cons "— none: set DueDate instead —"
+                                        invoice-qbo--no-term))))
+                          (pick (completing-read
+                                 (format "No %d-day term found. Use which term? " days)
+                                 choices nil t)))
+                     (cdr (assoc pick choices))))
+                  (t invoice-qbo--no-term))))
+        (setq invoice-qbo--cache (plist-put (or invoice-qbo--cache '()) :term-id id))
+        (setq invoice-qbo--cache
+              (plist-put invoice-qbo--cache :term-name
+                         (if match (plist-get match :Name) id)))
+        (invoice-qbo--save-cache)
+        (unless (equal id invoice-qbo--no-term) id)))))
+
+(defun invoice-qbo--due-date ()
+  "Return today plus `invoice-qbo-terms-days' as YYYY-MM-DD."
+  (format-time-string "%Y-%m-%d"
+                      (time-add (current-time)
+                                (days-to-time invoice-qbo-terms-days))))
+
+(defconst invoice-qbo--doc-number-page 1000
+  "Rows per page when scanning invoices for the highest DocNumber.")
+
+(defun invoice-qbo--next-doc-number ()
+  "Return the next invoice number: the highest numeric DocNumber plus one.
+Pages through every invoice because QBO can only sort DocNumber as a
+string, which would rank \"999\" above \"1000\".  Non-numeric numbers are
+ignored.  Zero padding on the highest number is preserved."
+  (let ((start 1) (highest nil) (width 1) (pages 0) (done nil))
+    (while (and (not done) (< pages 50))
+      (let* ((rows (invoice-qbo--all-rows
+                    (invoice-qbo--query
+                     (format "SELECT DocNumber FROM Invoice STARTPOSITION %d MAXRESULTS %d"
+                             start invoice-qbo--doc-number-page))
+                    :Invoice)))
+        (dolist (row rows)
+          (let ((dn (plist-get row :DocNumber)))
+            (when (and (stringp dn) (string-match-p "\\`[0-9]+\\'" dn))
+              (let ((n (string-to-number dn)))
+                (when (or (null highest) (> n highest))
+                  (setq highest n
+                        width (length dn)))))))
+        (cl-incf pages)
+        (if (< (length rows) invoice-qbo--doc-number-page)
+            (setq done t)
+          (setq start (+ start invoice-qbo--doc-number-page)))))
+    (unless done
+      (message "invoice-qbo: stopped scanning invoices after %d pages" pages))
+    (format (format "%%0%dd" width) (1+ (or highest 0)))))
 
 (defun invoice-qbo-reset-cache ()
   "Forget cached customer / item / tax code selections."
@@ -431,42 +808,102 @@ Returned alist is sorted by date ascending."
 ;;; -------------------------------------------------------------------
 ;;; Invoice payload + create
 
-(defun invoice-qbo--build-lines (grouped item-id tax-code-id)
-  (mapcar
-   (lambda (day)
-     (let* ((date (car day))
-            (work (cdr day))
-            (qty  (invoice-qbo--day-hours work))
-            (amt  (* qty invoice-qbo-hourly-rate))
-            (desc (format "%s\n%s" date (invoice-qbo--day-description work))))
-       `(:DetailType "SalesItemLineDetail"
-         :Amount ,(/ (round (* amt 100)) 100.0)
-         :Description ,desc
-         :SalesItemLineDetail
-         (:ItemRef     (:value ,item-id)
-          :Qty         ,qty
-          :UnitPrice   ,invoice-qbo-hourly-rate
-          :TaxCodeRef  (:value ,tax-code-id)))))
-   grouped))
+(defun invoice-qbo--day-minutes (work)
+  "Total minutes in WORK, a list of (TITLE . MINUTES)."
+  (apply #'+ (mapcar #'cdr work)))
 
-(defun invoice-qbo--build-payload (grouped customer-id item-id tax-code-id)
-  `(:CustomerRef (:value ,customer-id)
-    :Line ,(invoice-qbo--build-lines grouped item-id tax-code-id)
-    :TxnTaxDetail (:TxnTaxCodeRef (:value ,tax-code-id))
-    :GlobalTaxCalculation "TaxExcluded"))
+(defun invoice-qbo--line-cents (grouped)
+  "Return the amount in whole cents for each day in GROUPED.
+Rounding every day on its own drifts from the true total — twelve lines
+cost three cents on invoice 1012 — so the difference is handed out a
+cent at a time to the days that lost the most to rounding.  The list
+therefore sums to the total of the underlying minutes, exactly."
+  (let* ((exact (mapcar (lambda (day)
+                          (/ (* (invoice-qbo--day-minutes (cdr day))
+                                invoice-qbo-hourly-rate 100.0)
+                             60.0))
+                        grouped))
+         (cents (mapcar #'round exact))
+         (target (round (apply #'+ exact)))
+         (delta (- target (apply #'+ cents))))
+    (unless (zerop delta)
+      (let ((order (sort (number-sequence 0 (1- (length exact)))
+                         (lambda (a b)
+                           (let ((ra (- (nth a exact) (nth a cents)))
+                                 (rb (- (nth b exact) (nth b cents))))
+                             ;; Short: favour whoever was rounded down
+                             ;; hardest.  Over: take back from whoever was
+                             ;; rounded up hardest.
+                             (if (> delta 0) (> ra rb) (< ra rb))))))
+            (step (if (> delta 0) 1 -1)))
+        (dotimes (i (min (abs delta) (length order)))
+          (let ((idx (nth i order)))
+            (setf (nth idx cents) (+ (nth idx cents) step))))))
+    cents))
+
+(defun invoice-qbo--build-lines (grouped item-id tax-code-id cents)
+  "Return a vector of invoice line objects, one per day in GROUPED.
+CENTS supplies each line's amount, from `invoice-qbo--line-cents'.
+Qty is derived from that amount so Qty x UnitPrice matches it exactly
+and QBO cannot recompute a different figure.
+A vector, not a list: `json-encode' sees a list of plists as an alist
+\(each plist is a cons with an atom car) and would emit a JSON object
+with repeated keys instead of an array."
+  (vconcat
+   (cl-mapcar
+    (lambda (day amount-cents)
+      (let* ((date   (car day))
+             (work   (cdr day))
+             (amount (/ amount-cents 100.0))
+             (qty    (/ amount invoice-qbo-hourly-rate))
+             (desc   (format "%s\n%s" date (invoice-qbo--day-description work))))
+        `(:DetailType "SalesItemLineDetail"
+          :Amount ,amount
+          :Description ,desc
+          :SalesItemLineDetail
+          (:ItemRef     (:value ,item-id)
+           :Qty         ,qty
+           :UnitPrice   ,invoice-qbo-hourly-rate
+           :TaxCodeRef  (:value ,tax-code-id)))))
+    grouped cents)))
+
+(defun invoice-qbo--build-payload (grouped customer-id item-id tax-code-id
+                                           &optional term-id doc-number email)
+  "Build the invoice payload.
+TERM-ID sets the payment terms; without one, DueDate carries the same
+number of days.  DOC-NUMBER, when given, sets the invoice number.
+EMAIL, when given, becomes the invoice's BillEmail."
+  (append
+   `(:CustomerRef (:value ,customer-id)
+     :Line ,(invoice-qbo--build-lines grouped item-id tax-code-id
+                                      (invoice-qbo--line-cents grouped))
+     :TxnTaxDetail (:TxnTaxCodeRef (:value ,tax-code-id))
+     :GlobalTaxCalculation "TaxExcluded")
+   (if term-id
+       `(:SalesTermRef (:value ,term-id))
+     `(:DueDate ,(invoice-qbo--due-date)))
+   (when doc-number `(:DocNumber ,doc-number))
+   (when email `(:BillEmail (:Address ,email)))
+   (copy-sequence invoice-qbo-online-payment-flags)))
 
 (defun invoice-qbo--summarise (grouped)
-  (let* ((total-mins (apply #'+ (mapcar (lambda (d)
-                                          (apply #'+ (mapcar #'cdr (cdr d))))
-                                        grouped)))
-         (hours (/ total-mins 60.0))
-         (sub   (* hours invoice-qbo-hourly-rate))
-         (gst   (* sub invoice-qbo-gst-rate)))
+  "Summarise GROUPED using the same figures the invoice will carry.
+GST is summed per line rather than taken off the subtotal, because that
+is how QBO computes it — doing it either other way leaves the preview
+disagreeing with the invoice by a cent or two."
+  (let* ((cents   (invoice-qbo--line-cents grouped))
+         (sub-c   (apply #'+ cents))
+         (gst-c   (apply #'+ (mapcar (lambda (c)
+                                       (round (* c invoice-qbo-gst-rate)))
+                                     cents)))
+         (total-mins (apply #'+ (mapcar (lambda (d)
+                                          (invoice-qbo--day-minutes (cdr d)))
+                                        grouped))))
     (list :days (length grouped)
-          :hours hours
-          :subtotal sub
-          :gst gst
-          :total (+ sub gst))))
+          :hours (/ total-mins 60.0)
+          :subtotal (/ sub-c 100.0)
+          :gst (/ gst-c 100.0)
+          :total (/ (+ sub-c gst-c) 100.0))))
 
 (defun invoice-qbo--iso-to-dmy (iso)
   "Convert YYYY-MM-DD to dd/mm/yyyy."
@@ -507,17 +944,18 @@ Descriptions over `invoice-qbo-description-max' are summarised."
          (grouped (invoice-qbo--group-by-day entries))
          (sum (invoice-qbo--summarise grouped))
          (buf (get-buffer-create "*Invoice QBO Preview*"))
-         (rows (mapcar
-                (lambda (day)
+         (rows (cl-mapcar
+                (lambda (day amount-cents)
                   (let* ((work (cdr day))
                          (hrs  (invoice-qbo--day-hours work))
-                         (total (* hrs invoice-qbo-hourly-rate
-                                   (+ 1 invoice-qbo-gst-rate))))
+                         (total (/ (+ amount-cents
+                                      (round (* amount-cents invoice-qbo-gst-rate)))
+                                   100.0)))
                     (list (invoice-qbo--iso-to-dmy (car day))
                           (mapconcat #'car work ", ")
                           hrs
                           total)))
-                grouped))
+                grouped (invoice-qbo--line-cents grouped)))
          (desc-w  (apply #'max 11 (mapcar (lambda (r) (length (nth 1 r))) rows)))
          (hrs-w   (apply #'max  5 (mapcar (lambda (r) (length (format "%.2f" (nth 2 r)))) rows)))
          (total-w (apply #'max  8 (mapcar (lambda (r) (length (format "%.2f" (nth 3 r)))) rows)))
@@ -542,6 +980,32 @@ Descriptions over `invoice-qbo-description-max' are summarised."
                       (plist-get sum :total)))
       (goto-char (point-min)))
     (display-buffer buf)))
+
+(defun invoice-qbo--bump-doc-number (doc-number)
+  "Return DOC-NUMBER incremented by one, keeping its zero padding."
+  (format (format "%%0%dd" (length doc-number))
+          (1+ (string-to-number doc-number))))
+
+(defun invoice-qbo--post-invoice (payload)
+  "POST PAYLOAD to QBO, retrying with the next number if ours is taken.
+QBO only rejects duplicates when custom transaction numbers are on, but
+another invoice can be raised between our scan and this POST."
+  (let ((attempts 0) (resp nil))
+    (while (null resp)
+      (cl-incf attempts)
+      (condition-case err
+          (setq resp (invoice-qbo--request "POST" "invoice" payload))
+        (error
+         (let ((doc-number (plist-get payload :DocNumber)))
+           (if (and doc-number
+                    (< attempts 5)
+                    (string-match-p "Duplicate Document Number"
+                                    (error-message-string err)))
+               (let ((next (invoice-qbo--bump-doc-number doc-number)))
+                 (message "invoice-qbo: #%s taken, trying #%s" doc-number next)
+                 (setq payload (plist-put payload :DocNumber next)))
+             (signal (car err) (cdr err)))))))
+    resp))
 
 (defvar-local invoice-qbo--last-invoice nil
   "Plist holding the most recent invoice created from this buffer.
@@ -570,30 +1034,57 @@ After creation, the task list and invoice number are stashed so that
            (customer-id (invoice-qbo--pick-customer))
            (item-id     (invoice-qbo--pick-item))
            (tax-id      (invoice-qbo--pick-tax-code))
-           (payload (invoice-qbo--build-payload grouped customer-id item-id tax-id))
-           (resp (invoice-qbo--request "POST" "invoice" payload))
+           (term-id     (invoice-qbo--pick-term))
+           (doc-number  (when invoice-qbo-set-doc-number
+                          (invoice-qbo--next-doc-number)))
+           (email       (invoice-qbo--customer-email customer-id))
+           (payload (invoice-qbo--build-payload grouped customer-id item-id tax-id
+                                                term-id doc-number email))
+           (resp (invoice-qbo--post-invoice payload))
            (inv  (plist-get resp :Invoice)))
       (if inv
           (progn
+            ;; Only now that QBO has accepted the invoice do we touch the
+            ;; org file — a failed POST must leave the headings untagged
+            ;; so the next run picks them up again.
             (with-current-buffer src-buf
               (setq invoice-qbo--last-invoice
                     (list :doc-number (plist-get inv :DocNumber)
                           :id         (plist-get inv :Id)
-                          :tasks      tasks)))
-            (message "QBO invoice #%s created (id %s) — total $%s. Not sent. Run C-c q m to tag the source headings."
+                          :tasks      tasks))
+              (invoice-qbo-mark-invoiced))
+            (message "invoice-qbo: PayPal flag on the new invoice: %s"
+                     (if (eq (plist-get inv :AllowOnlinePayPalPayment) t)
+                         "true"
+                       "false — QBO refused it at creation too"))
+            (when (and doc-number
+                       (not (equal doc-number (plist-get inv :DocNumber))))
+              (message "invoice-qbo: asked for #%s, QBO used #%s — run M-x invoice-qbo-check-settings"
+                       doc-number (or (plist-get inv :DocNumber) "(blank)")))
+            (message "QBO invoice #%s created (id %s) — total $%s, terms %s, email %s. Not sent. Headings tagged :%s:"
                      (plist-get inv :DocNumber)
                      (plist-get inv :Id)
-                     (plist-get inv :TotalAmt)))
+                     (plist-get inv :TotalAmt)
+                     (or (plist-get invoice-qbo--cache :term-name) "DueDate only")
+                     (or email "none on customer record")
+                     (invoice-qbo--invoice-tag (plist-get inv :DocNumber))))
         (message "QBO response: %S" resp)))))
 
 (defun invoice-qbo--sanitise-tag (s)
-  "Convert S into something safe to use as an org tag."
-  (let ((out (replace-regexp-in-string "[^A-Za-z0-9_@]" "_" s)))
+  "Convert S into something safe to use as an org tag.
+Org tags allow alphanumerics plus _ @ # and %, so the # in `inv#123'
+survives."
+  (let ((out (replace-regexp-in-string "[^A-Za-z0-9_@#%]" "_" s)))
     (if (string-match-p "\\`[A-Za-z@_]" out) out (concat "n" out))))
 
+(defun invoice-qbo--invoice-tag (doc-number)
+  "Return the org tag for invoice DOC-NUMBER, e.g. `inv#1043'."
+  (invoice-qbo--sanitise-tag (format "inv#%s" doc-number)))
+
 (defun invoice-qbo-mark-invoiced ()
-  "Tag the headings of the last invoice with :invoiced_DOCNUMBER:.
-Uses the data stashed by `invoice-qbo-create-from-buffer'.  Adds an
+  "Tag the headings of the last invoice with :inv#DOCNUMBER:.
+Uses the data stashed by `invoice-qbo-create-from-buffer', which calls
+this automatically once QBO has accepted the invoice.  Adds an
 `INVOICE_NUMBER' property and the org tag so future runs will skip
 these entries (they are no longer untagged)."
   (interactive)
@@ -601,7 +1092,7 @@ these entries (they are no longer untagged)."
     (user-error "No recent invoice in this buffer — run C-c q i first"))
   (let* ((doc   (plist-get invoice-qbo--last-invoice :doc-number))
          (tasks (plist-get invoice-qbo--last-invoice :tasks))
-         (tag   (concat "invoiced_" (invoice-qbo--sanitise-tag (format "%s" doc))))
+         (tag   (invoice-qbo--invoice-tag doc))
          (count 0))
     (save-excursion
       (dolist (task tasks)
@@ -624,7 +1115,9 @@ these entries (they are no longer untagged)."
   (define-key org-mode-map (kbd "C-c q p") #'invoice-qbo-preview-from-buffer)
   (define-key org-mode-map (kbd "C-c q m") #'invoice-qbo-mark-invoiced)
   (define-key org-mode-map (kbd "C-c q a") #'invoice-qbo-authorize)
-  (define-key org-mode-map (kbd "C-c q l") #'invoice-qbo-logout))
+  (define-key org-mode-map (kbd "C-c q l") #'invoice-qbo-logout)
+  (when (fboundp 'shell-env-reload)
+    (define-key org-mode-map (kbd "C-c q e") #'shell-env-reload)))
 
 (provide 'invoice_quickbooks)
 ;;; invoice_quickbooks.el ends here
