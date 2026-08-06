@@ -45,3 +45,6 @@ straight
 /projects
 /request/
 /edraw-ui-state.config
+
+# QBO OAuth tokens — never commit
+.invoice-qbo-tokens.el

@@ -111,6 +111,7 @@
 ;;--------------------------------------------------------------------------------
 ;;-Base emacs related (0-39)
 ;;--------------------------------------------------------------------------------
+(load "shell-env.el")
 (load "00-common-setup.el")
 (load "01-pdf-tools.el")
 (load "02-bpr.el")
@@ -336,10 +337,9 @@
      "/home/map7/org/scary_tech.org" "/home/map7/org/series.org"
      "/home/map7/org/shoes.org" "/home/map7/org/shopping.org"
      "/home/map7/org/sister.org" "/home/map7/org/soundbars.org"
-     "/home/map7/org/spare.org" "/home/map7/org/squash.org"
-     "/home/map7/org/staffreview.org" "/home/map7/org/starcraft.org"
-     "/home/map7/org/startrek.org" "/home/map7/org/steam.org"
-     "/home/map7/org/steam_controller.org"
+     "/home/map7/org/squash.org" "/home/map7/org/staffreview.org"
+     "/home/map7/org/starcraft.org" "/home/map7/org/startrek.org"
+     "/home/map7/org/steam.org" "/home/map7/org/steam_controller.org"
      "/home/map7/org/sylvana.org" "/home/map7/org/tax.org"
      "/home/map7/org/temp.org" "/home/map7/org/tents.org"
      "/home/map7/org/test.org" "/home/map7/org/test_reveal.org"
@@ -549,6 +549,13 @@
  '(paperless-root-directory "~/paperless/documents")
  '(paradox-automatically-star t)
  '(paradox-github-token t)
+ '(safe-local-variable-values
+   '((dired-omit-files . "\\.html\\'")
+     (ruby-compilation-executable . "ruby")
+     (ruby-compilation-executable . "ruby1.8")
+     (ruby-compilation-executable . "ruby1.9")
+     (ruby-compilation-executable . "rbx")
+     (ruby-compilation-executable . "jruby")))
  '(undo-tree-visualizer-default-face nil)
  '(xcb:debug t))
 (custom-set-faces
