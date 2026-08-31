@@ -48,3 +48,7 @@ straight
 
 # QBO OAuth tokens — never commit
 .invoice-qbo-tokens.el
+
+# Byte-compiled output and flycheck scratch files
+*.elc
+flycheck_*.el
