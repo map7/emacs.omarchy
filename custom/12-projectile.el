@@ -17,6 +17,13 @@
   :config
   (setq projectile-enable-caching t)
   (setq projectile-completion-system 'ivy)
+  ;; Only detect projects via VCS / .projectile markers, not stray build
+  ;; files (package.json, Gemfile, ...) that would otherwise make the home
+  ;; directory a "project" and hang Emacs while indexing it.
+  (setq projectile-project-root-functions
+        '(projectile-root-local projectile-root-bottom-up))
+  ;; Faster, gitignore-aware indexing via external tools.
+  (setq projectile-indexing-method 'alien)
   )
 
 ;; FIX hange issue with tramp. Tested this 16/02/2017 and it's fixed.
