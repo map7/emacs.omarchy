@@ -536,7 +536,7 @@
                       org2blog org-clock-csv org-cliplink
                       org-attach-screenshot nlinum multiple-cursors
                       multi-term moe-theme markdown-mode magit
-                      linum-off jsx-mode js2-mode
+                      linum-off js2-mode
                       highlight-parentheses highlight-indentation
                       haml-mode grizzl expand-region enh-ruby-mode
                       diredful dired-details csv-mode coffee-mode

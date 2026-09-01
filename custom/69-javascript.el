@@ -1,5 +1,4 @@
 (use-package js2-mode :ensure t :defer 5)
-(use-package jsx-mode :ensure t :defer 5)
 (use-package indium
   :ensure t
   :init
