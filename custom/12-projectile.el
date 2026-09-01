@@ -28,4 +28,4 @@
 
 ;; FIX hange issue with tramp. Tested this 16/02/2017 and it's fixed.
 ;; https://github.com/bbatsov/prelude/issues/594
-(projectile-global-mode 1)
+(projectile-mode +1)
