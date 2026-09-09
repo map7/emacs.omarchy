@@ -129,6 +129,155 @@
   (setq tables (cl-sort tables (lambda (table1 table2) (> (nth 1 table1) (nth 1 table2)))))
   (funcall (or org-clock-clocktable-formatter 'org-clocktable-write-default) ipos tables params))
 
+;; --- Wiki search -------------------------------------------------------------
+;; index.org links to search.html, which never existed. Rather than a static
+;; page (which cannot grep 748 files) this is a route on the running server, so
+;; results are always current and there is no index to rebuild.
+
+(defvar org-ehtml-search-max-files 100
+  "Maximum number of files listed in one search result page.")
+
+(defvar org-ehtml-search-max-hits 5
+  "Maximum matching lines shown per file.")
+
+(defun org-ehtml-search--escape (s)
+  "HTML-escape S."
+  (let ((s (or s "")))
+    (dolist (pair '(("&" . "&amp;") ("<" . "&lt;") (">" . "&gt;") ("\"" . "&quot;")) s)
+      (setq s (replace-regexp-in-string (car pair) (cdr pair) s t t)))))
+
+(defun org-ehtml-search--highlight (line query)
+  "HTML-escape LINE and wrap case-insensitive occurrences of QUERY in <mark>."
+  (let ((case-fold-search t)
+        (esc (org-ehtml-search--escape line))
+        (q   (org-ehtml-search--escape query)))
+    (if (string-empty-p q)
+        esc
+      (replace-regexp-in-string (regexp-quote q)
+                                (lambda (m) (concat "<mark>" m "</mark>"))
+                                esc t t))))
+
+(defun org-ehtml-search--run (query)
+  "Return an alist of (RELATIVE-PATH . ((LINE-NO . TEXT) ...)) matching QUERY.
+Matching is literal and case-insensitive, so a phrase or a partial word works."
+  (let ((default-directory org-ehtml-docroot)
+        results)
+    (with-temp-buffer
+      ;; -F literal, -i case-insensitive, -I skip binaries, -m cap per file.
+      (call-process "grep" nil t nil
+                    "-rnI" "-i" "-F"
+                    (format "-m%d" org-ehtml-search-max-hits)
+                    "--include=*.org" "--include=*.html"
+                    "--exclude-dir=.git"
+                    "--" query ".")
+      (goto-char (point-min))
+      (while (re-search-forward "^\\./\\([^\0:]+\\):\\([0-9]+\\):\\(.*\\)$" nil t)
+        (let* ((file (match-string 1))
+               (line (string-to-number (match-string 2)))
+               (text (string-trim (match-string 3)))
+               (cell (assoc file results)))
+          (if cell
+              (setcdr cell (cons (cons line text) (cdr cell)))
+            (push (cons file (list (cons line text))) results)))))
+    ;; org-ehtml caches each exported page as a .html sibling of its .org, so
+    ;; a hit in foo.org usually also hits foo.html and the same page would be
+    ;; listed twice - and the .html copy matches export markup as well as
+    ;; prose. Drop any .html that has a .org beside it; the .org is the source
+    ;; and is what the server renders. Standalone .html files are kept.
+    (setq results
+          (seq-remove (lambda (c)
+                        (let ((f (car c)))
+                          (and (string-suffix-p ".html" f)
+                               (file-exists-p
+                                (expand-file-name
+                                 (concat (file-name-sans-extension f) ".org")
+                                 org-ehtml-docroot)))))
+                      results))
+    (mapcar (lambda (c) (cons (car c) (nreverse (cdr c))))
+            (nreverse results))))
+
+(defun org-ehtml-search--text-fragment (s)
+  "Percent-encode S for use in a #:~:text= URL fragment.
+`url-hexify-string' leaves - alone because it is unreserved, but - is
+separator syntax inside a text fragment, so encode it too."
+  (replace-regexp-in-string "-" "%2D" (url-hexify-string (string-trim s)) t t))
+
+(defun org-ehtml-search--page (query)
+  "Return the full HTML page for QUERY (nil or empty shows just the form)."
+  (let* ((q (or query ""))
+         (results (unless (string-empty-p (string-trim q))
+                    (org-ehtml-search--run (string-trim q))))
+         (shown (seq-take results org-ehtml-search-max-files)))
+    (concat
+     "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"/>"
+     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>"
+     "<title>Search</title>"
+     "<link rel=\"stylesheet\" type=\"text/css\" href=\"css/stylesheet.css\"/>"
+     "<style>"
+     "body{font-family:system-ui,sans-serif;max-width:60em;margin:2em auto;padding:0 1em;line-height:1.5}"
+     "form{display:flex;gap:.5em;margin-bottom:1.5em}"
+     "input[type=search]{flex:1;padding:.5em;font-size:1rem}"
+     "button{padding:.5em 1.2em;font-size:1rem;cursor:pointer}"
+     "li{margin-bottom:1.2em;list-style:none}"
+     "ul{padding-left:0}"
+     ".hit{font-family:ui-monospace,monospace;font-size:.85rem;color:#555;margin:.15em 0 .15em 1.5em;"
+     "white-space:pre-wrap;word-break:break-word}"
+     ".ln{color:#999;margin-right:.6em}"
+     "mark{background:#ffe066;padding:0 .1em}"
+     ".count{color:#666;margin-bottom:1em}"
+     "</style></head><body>"
+     "<h1>Search the manual</h1>"
+     "<form action=\"/search\" method=\"get\">"
+     "<input type=\"search\" name=\"q\" autofocus placeholder=\"phrase or partial word\" value=\""
+     (org-ehtml-search--escape q) "\"/>"
+     "<button type=\"submit\">Search</button></form>"
+     "<p><a href=\"/index.org\">&larr; Back to index</a></p>"
+     (cond
+      ((string-empty-p (string-trim q)) "")
+      ((null results)
+       (concat "<p class=\"count\">No matches for <strong>"
+               (org-ehtml-search--escape q) "</strong>.</p>"))
+      (t
+       (concat
+        "<p class=\"count\">" (number-to-string (length results))
+        (if (= 1 (length results)) " file matches " " files match ")
+        "<strong>" (org-ehtml-search--escape q) "</strong>"
+        (if (> (length results) org-ehtml-search-max-files)
+            (format " (showing the first %d)" org-ehtml-search-max-files) "")
+        ".</p><ul>"
+        (mapconcat
+         (lambda (entry)
+           (let* ((file (car entry)) (hits (cdr entry))
+                  (frag (org-ehtml-search--text-fragment (string-trim q))))
+             ;; Hexify per segment: url-hexify-string's second argument is a
+             ;; list of allowed characters, not a string, and "/" must survive.
+             (concat "<li><a href=\"/"
+                     (mapconcat #'url-hexify-string (split-string file "/") "/")
+                     ;; Scroll the page to the first occurrence rather than
+                     ;; landing at the top. Needs a browser with
+                     ;; scroll-to-text-fragment; elsewhere it is ignored and
+                     ;; the page simply opens at the top.
+                     "#:~:text=" frag "\">"
+                     (org-ehtml-search--escape file) "</a>"
+                     (mapconcat
+                      (lambda (hit)
+                        (concat "<div class=\"hit\"><span class=\"ln\">"
+                                (number-to-string (car hit)) "</span>"
+                                (org-ehtml-search--highlight (cdr hit) (string-trim q))
+                                "</div>"))
+                      hits "")
+                     "</li>")))
+         shown "")
+        "</ul>")))
+     "</body></html>")))
+
+(defun org-ehtml-search-handler (request)
+  "Serve the search form, and results when a q parameter is present."
+  (with-slots (process headers) request
+    (let ((body (org-ehtml-search--page (cdr (assoc "q" headers)))))
+      (ws-response-header process 200 '("Content-type" . "text/html; charset=utf-8"))
+      (process-send-string process body))))
+
 ;; WIKI
 (use-package web-server :ensure t)
 (use-package org-ehtml
@@ -136,7 +285,13 @@
   :config
   (setq org-ehtml-docroot (expand-file-name "~/org/business"))
   (setq org-ehtml-everything-editable t)
+  ;; Route /search and /search.html to the search page. Must be prepended
+  ;; before ws-start: ws-start captures the handler list by value, and the
+  ;; catch-all ((:GET . ".*")) below would otherwise match first.
+  (add-to-list 'org-ehtml-handler
+               '((:GET . "^/search\\(\\.html\\)?$") . org-ehtml-search-handler))
   (ws-start org-ehtml-handler 8888 nil :host "0.0.0.0"))
+
 
 
 ;;  Currently broken on second commit.
