@@ -175,7 +175,9 @@ them in a running Emacs — use \\[customize-set-variable] or `setq'."
 (defun invoice-qbo--save-cache ()
   (with-temp-file invoice-qbo-cache-file
     (insert ";; -*- mode: emacs-lisp; -*-\n")
-    (prin1 invoice-qbo--cache (current-buffer))))
+    (prin1 invoice-qbo--cache (current-buffer)))
+  ;; Holds customer and tax details, so keep it as private as the tokens.
+  (set-file-modes invoice-qbo-cache-file #o600))
 
 (defun invoice-qbo--load-cache ()
   (when (file-readable-p invoice-qbo-cache-file)
