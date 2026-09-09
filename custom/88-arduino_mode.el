@@ -10,8 +10,11 @@
 (defvar arduino-board "esp32:esp32:esp32c3"
   "FQBN for arduino-cli (e.g. \"arduino:avr:uno\", \"esp32:esp32:esp32c3\").")
 
-(defvar arduino-tcp-host "10.1.1.92"
-  "TCP host for OTA uploads (e.g. \"192.168.1.100\").")
+(defvar arduino-tcp-host nil
+  "TCP host for OTA uploads (e.g. \"192.168.1.100\").
+Left unset so this repo carries no LAN address.  `arduino-upload-tcp'
+prompts when it is nil, and `arduino-pick-tcp-host' (C-c a d) finds
+devices over mDNS.")
 
 (defvar arduino-tcp-port "3232"
   "TCP port for OTA uploads.")
