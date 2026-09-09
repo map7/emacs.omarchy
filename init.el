@@ -567,4 +567,11 @@
 ;;;; Omarchy integration - theme, font, shell. Loaded last so it wins.
 (load (expand-file-name "omarchy" user-emacs-directory))
 
+;; omarchy.el puts `delete-trailing-whitespace' on before-save-hook globally.
+;; That is wrong for this setup: real-auto-save-mode saves every org buffer
+;; every 5 seconds, so a single keystroke rewrites whitespace across the whole
+;; file, and ~/org is a Syncthing folder - the churn propagates to every device.
+;; Drop it. Use `M-x delete-trailing-whitespace' by hand when you want it.
+(remove-hook 'before-save-hook #'delete-trailing-whitespace)
+
 ;;; init.el ends here
