@@ -13,9 +13,10 @@
 ; Keybinding (Keyboard shortcuts)
 ;;(global-set-key [f1] 'rotate-windows)GG
 ;;(global-set-key [f2] 'gist-region-or-buffer)
-(global-set-key [f2] 'org-clock-report)
+;; f2 is counsel-git, bound in 33-ivy.el next to its s-f twin.
+;; org-clock-report is still on C-c C-x C-r (40-org.el).
 ;(global-set-key [f3] 'twit)
-(global-set-key [f3] 'treemacs)
+;; f3 is my/counsel-grep, bound in 33-ivy.el next to its s-g twin.
 (global-set-key [f4] 'magit-log-all)
 (global-set-key [f5] 'magit-status)
 (global-set-key [f6] 'eshell)
