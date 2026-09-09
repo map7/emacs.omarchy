@@ -22,7 +22,7 @@
 (global-set-key [f6] 'eshell)
 (global-set-key [f7] 'split-window-vertically)
 (global-set-key [f8] 'other-window)
-;; f9 is taken by git-status somewhere.
+;; f9 is unavailable: Hyprland binds it to voxtype push-to-talk dictation.
 (global-set-key [f10] 'undo-tree-visualize)
 
 (global-set-key (kbd "M-<up>") 'move-line-up)

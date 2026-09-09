@@ -28,6 +28,58 @@
 (global-set-key (kbd "s-i") 'org-clock-in)
 (global-set-key (kbd "s-o") 'org-clock-out)
 
+;; F12 toggles the clock from point: clock out when point is already in the
+;; clocked task, otherwise clock into the task at point.
+;; (F9 is not usable here - Hyprland binds it to voxtype push-to-talk.)
+(defun my/org-clocked-heading ()
+  "Return the heading being clocked, as a cons of (BUFFER . POSITION).
+Return nil when no clock is running."
+  (when (and (org-clocking-p) (buffer-live-p (marker-buffer org-clock-marker)))
+    (with-current-buffer (marker-buffer org-clock-marker)
+      (save-excursion
+        (goto-char org-clock-marker)
+        (org-back-to-heading t)
+        (cons (current-buffer) (point))))))
+
+(defun my/org-clocked-marker-p (marker)
+  "Return non-nil when MARKER sits in the entry that is clocked in."
+  (let ((clocked (my/org-clocked-heading)))
+    (when (and clocked marker (marker-buffer marker)
+               (eq (marker-buffer marker) (car clocked)))
+      (let ((pos (with-current-buffer (marker-buffer marker)
+                   (save-excursion
+                     (goto-char marker)
+                     (unless (org-before-first-heading-p)
+                       (org-back-to-heading t)
+                       (point))))))
+        (and pos (= pos (cdr clocked)))))))
+
+(defun my/org-clock-toggle ()
+  "Toggle the org clock from point.
+Clock out when point is in the task that is already clocked in.  On
+any other task, clock into that task instead.  Outside a heading,
+clock out if a clock is running."
+  (interactive)
+  (cond
+   ((derived-mode-p 'org-agenda-mode)
+    (let ((marker (or (org-get-at-bol 'org-hd-marker)
+                      (org-get-at-bol 'org-marker))))
+      (cond ((my/org-clocked-marker-p marker) (org-agenda-clock-out))
+            (marker (org-agenda-clock-in))
+            ((org-clocking-p) (org-agenda-clock-out))
+            (t (message "No org task on this line")))))
+   ((derived-mode-p 'org-mode)
+    (cond ((my/org-clocked-marker-p (point-marker)) (org-clock-out))
+          ((org-before-first-heading-p)
+           (if (org-clocking-p)
+               (org-clock-out)
+             (message "Point is not in an org task")))
+          (t (org-clock-in))))
+   ((org-clocking-p) (org-clock-out))
+   (t (message "No clock running and no org task at point"))))
+
+(global-set-key [f12] 'my/org-clock-toggle)
+
 ;; Org-babel languages
 (org-babel-do-load-languages
  'org-babel-load-languages
