@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (use-package yafolding
   :init
   (add-hook 'prog-mode-hook

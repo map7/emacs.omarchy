@@ -1,4 +1,4 @@
-;; Load rails snippets
+;; Load rails snippets  -*- lexical-binding: t; -*-
 (use-package yasnippet
   :init
   (add-hook 'rails-minor-mode-hook '(lambda () (yas-minor-mode)))

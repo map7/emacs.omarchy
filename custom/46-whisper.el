@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (use-package whisper
   :straight (whisper :type git :host github :repo "natrys/whisper.el")
   :bind (("C-c w" . whisper-run)

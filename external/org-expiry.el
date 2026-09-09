@@ -1,4 +1,4 @@
-;;; org-expiry.el --- expiry mechanism for Org entries
+;;; org-expiry.el --- expiry mechanism for Org entries  -*- lexical-binding: t; -*-
 ;;
 ;; Copyright 2007-2014 Free Software Foundation, Inc.
 ;;

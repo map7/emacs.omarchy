@@ -1,4 +1,4 @@
-;; haml
+;; haml  -*- lexical-binding: t; -*-
 (use-package haml-mode
   :defer 2
   :init

@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (use-package multi-term
   :init
   ;; Fix UTF8 characters in terminals

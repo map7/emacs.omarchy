@@ -1,4 +1,4 @@
-;; Move by holding down super and using the arrow keys
+;; Move by holding down super and using the arrow keys  -*- lexical-binding: t; -*-
 (use-package windmove
   :init
   (windmove-default-keybindings 'super)

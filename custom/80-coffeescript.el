@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (use-package coffee-mode
   :init
   (add-hook 'coffee-mode-hook '(lambda() (coffee-custom)))

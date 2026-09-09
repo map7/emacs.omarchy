@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (defun my-flycheck-rubocop-error-count ()
   "Return the number of Flycheck errors from RuboCop."
   (let ((errors (seq-filter

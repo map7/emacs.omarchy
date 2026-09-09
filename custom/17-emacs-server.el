@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (global-set-key (kbd "C-!") 'server-shutdown) 
 
 ;; define function to shutdown emacs server instance

@@ -1,4 +1,4 @@
-;; Dired functions
+;; Dired functions  -*- lexical-binding: t; -*-
 
 
 ;; Ref: ~/org/business/.dir-locals.el on how I use this function

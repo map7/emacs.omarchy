@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (use-package web-mode
   :init
   ;; Template file types only — .tsx handled by 63-tide.el, .js/.jsx by 69-javascript.el

@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (require 'flyspell)
 (setq flyspell-issue-message-flg nil)
 ;; "british" is an aspell dictionary name. Only hunspell is installed here, and

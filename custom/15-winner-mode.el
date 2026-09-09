@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (when (fboundp 'winner-mode)
 	  (winner-mode 1))
 

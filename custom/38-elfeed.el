@@ -1,4 +1,4 @@
-;;; 38-elfeed.el --- Elfeed podcast/feed reader configuration
+;;; 38-elfeed.el --- Elfeed podcast/feed reader configuration  -*- lexical-binding: t; -*-
 
 ;;; Code:
 

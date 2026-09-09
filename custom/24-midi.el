@@ -1,4 +1,4 @@
-;;; 24-midi.el --- MIDI file playback using fluidsynth
+;;; 24-midi.el --- MIDI file playback using fluidsynth  -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 ;;; Play MIDI files from Emacs using fluidsynth.

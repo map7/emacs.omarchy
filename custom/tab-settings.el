@@ -1,4 +1,4 @@
-;; Tab settings
+;; Tab settings  -*- lexical-binding: t; -*-
 
 ;; ;; 2023-TODO: use these for 4gl mode
 ;; (define-key global-map (kbd "C-j") 'electric-newline-and-maybe-indent)

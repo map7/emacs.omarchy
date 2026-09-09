@@ -1,4 +1,4 @@
-;;; Put Emacs auto-save and backup files to /tmp/ or C:/Temp/
+;;; Put Emacs auto-save and backup files to /tmp/ or C:/Temp/  -*- lexical-binding: t; -*-
 (defconst emacs-tmp-dir (expand-file-name (format "emacs%d" (user-uid)) temporary-file-directory))
 (setq
    backup-by-copying t                                        ; Avoid symlinks

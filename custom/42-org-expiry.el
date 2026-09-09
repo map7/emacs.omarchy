@@ -1,4 +1,4 @@
-;; Allow automatically handing of created/expired meta data.
+;; Allow automatically handing of created/expired meta data.  -*- lexical-binding: t; -*-
 (require 'org-expiry)
 ;; Configure it a bit to my liking
 (setq

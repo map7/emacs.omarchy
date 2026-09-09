@@ -1,4 +1,4 @@
-;; Resizing splits
+;; Resizing splits  -*- lexical-binding: t; -*-
 (defun win-resize-up ()
   (interactive)
   (enlarge-window 7))

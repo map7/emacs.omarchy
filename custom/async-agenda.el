@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (defun map-text-properties (props)
   (let ((plist (caddr props)))
     (while plist

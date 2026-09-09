@@ -1,4 +1,4 @@
-;;; init.el --- Emacs configuration backbone
+;;; init.el --- Emacs configuration backbone  -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 ;;; All Emacs configuration starts from this file.

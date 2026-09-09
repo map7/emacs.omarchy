@@ -1,4 +1,4 @@
-; When Rinari mode is loaded, add extra bindings to its key map enabling the
+; When Rinari mode is loaded, add extra bindings to its key map enabling the  -*- lexical-binding: t; -*-
 ; use of M-R and M-r as its prefixes. The easier to type M-r is used for the
 ; frequently used `find' functions and M-R is used for the more infrequently
 ; used rake/script/web-server commands. M-r is normally bound to

@@ -1,4 +1,4 @@
-;; arduino-mode with arduino-cli
+;; arduino-mode with arduino-cli  -*- lexical-binding: t; -*-
 ;;
 ;; C-c a c  = compile
 ;; C-c a u  = upload (USB serial)

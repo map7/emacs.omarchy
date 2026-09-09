@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (use-package rspec-mode
   :defer 5
   :config

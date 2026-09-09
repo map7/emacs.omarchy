@@ -1,4 +1,4 @@
-;; Common tasks to do in the background
+;; Common tasks to do in the background  -*- lexical-binding: t; -*-
 
 ;; Run tests on a rails project
 (defun rspec-tests ()

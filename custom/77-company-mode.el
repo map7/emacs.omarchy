@@ -1,4 +1,4 @@
-;; Setup company stats to sort most commonly used ones at the top.
+;; Setup company stats to sort most commonly used ones at the top.  -*- lexical-binding: t; -*-
 
 (use-package company-statistics
   :init

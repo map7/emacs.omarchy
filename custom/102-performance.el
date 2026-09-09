@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (setq gc-cons-threshold 100000000)     ;; Delay the garabage collection
 
 (setq read-process-output-max (* 1024 1024)) ;; 1mb

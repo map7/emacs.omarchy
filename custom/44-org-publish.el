@@ -1,4 +1,4 @@
-;; org publish options
+;; org publish options  -*- lexical-binding: t; -*-
 
 (setq org-publish-project-alist
 	  '(

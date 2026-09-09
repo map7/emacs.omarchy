@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (setq path-to-ctags "/usr/bin/ctags")
 
 (defun create-tags (dir-name)

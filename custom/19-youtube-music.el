@@ -1,4 +1,4 @@
-;; youtube-music - control YouTube Music playback from within Emacs
+;; youtube-music - control YouTube Music playback from within Emacs  -*- lexical-binding: t; -*-
 ;; https://github.com/emacsmirror/youtube-music
 ;;
 ;; Bound to Super + multimedia keys (s-XF86Audio*) so the plain media keys

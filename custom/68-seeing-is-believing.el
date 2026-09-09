@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (defun seeing-is-believing ()
   "Replace the current region (or the whole buffer, if none) with the output
 of seeing_is_believing."

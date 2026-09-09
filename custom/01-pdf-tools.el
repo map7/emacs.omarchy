@@ -1,4 +1,4 @@
-;; pdf-tools for viewing PDFs
+;; pdf-tools for viewing PDFs  -*- lexical-binding: t; -*-
 
 (use-package pdf-tools
   :init

@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (load "tab-settings")
 (load "backup-settings")
 (load "conf-mode-settings")

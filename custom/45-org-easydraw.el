@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (use-package edraw
   :straight (el-easydraw :type git :host github :repo "misohena/el-easydraw")
   :defer t)

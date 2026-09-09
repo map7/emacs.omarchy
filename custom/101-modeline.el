@@ -1,4 +1,4 @@
-;; Modeline --- Creates custom modeline
+;; Modeline --- Creates custom modeline  -*- lexical-binding: t; -*-
 ;;; Commentary:
 ;;; Code:
 

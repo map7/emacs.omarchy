@@ -1,4 +1,4 @@
-;; General shortcut keys
+;; General shortcut keys  -*- lexical-binding: t; -*-
 
 ;; ;; Remap hyper key as super
 ;; (setq x-hyper-keysym 'super)

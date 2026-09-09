@@ -1,4 +1,4 @@
-;; Add mise python and ruff to exec-path
+;; Add mise python and ruff to exec-path  -*- lexical-binding: t; -*-
 (dolist (tool '("python" "ruff"))
   (let ((dir (string-trim
               (shell-command-to-string (format "mise where %s 2>/dev/null" tool)))))

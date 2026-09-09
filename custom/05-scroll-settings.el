@@ -1,4 +1,4 @@
-;; set scroll to step by 1 instead of half a page.
+;; set scroll to step by 1 instead of half a page.  -*- lexical-binding: t; -*-
 (setq scroll-step            1
 	  scroll-conservatively  10000)
 

@@ -1,4 +1,4 @@
-;; Resolve a mise-managed binary, preferring the currently-active version.
+;; Resolve a mise-managed binary, preferring the currently-active version.  -*- lexical-binding: t; -*-
 ;; Resolution happens on demand so a stale Emacs daemon doesn't keep pointing
 ;; at a ruby version that mise has since removed.
 (defun my/mise-bin (name)

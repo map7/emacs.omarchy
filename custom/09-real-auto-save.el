@@ -1,4 +1,4 @@
-;; Automatically save the file
+;; Automatically save the file  -*- lexical-binding: t; -*-
 ;; 
 (use-package real-auto-save
   :init

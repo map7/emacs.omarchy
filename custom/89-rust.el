@@ -1,4 +1,4 @@
-;; Add mise rust to exec-path
+;; Add mise rust to exec-path  -*- lexical-binding: t; -*-
 (let ((dir (string-trim
             (shell-command-to-string "mise where rust 2>/dev/null"))))
   (when (and (not (string-empty-p dir))

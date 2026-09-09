@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (use-package org-attach-screenshot :ensure t :defer 5)
 
 ;; Enable ODT export backend

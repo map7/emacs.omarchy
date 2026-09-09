@@ -1,4 +1,4 @@
-;; Setup external directory variable
+;; Setup external directory variable  -*- lexical-binding: t; -*-
 (setq elisp-external-dir
     (expand-file-name "external" user-emacs-directory))
 

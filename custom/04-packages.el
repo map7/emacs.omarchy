@@ -1,4 +1,4 @@
-;; Upgrade all packages
+;; Upgrade all packages  -*- lexical-binding: t; -*-
 (defun package-update-all ()
   "Update all packages"
   (interactive)

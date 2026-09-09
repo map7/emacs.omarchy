@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (use-package grizzl :defer)
 (use-package projectile-rails
   :defer 2

@@ -1,4 +1,4 @@
-;; Export to reveal.js for presentations
+;; Export to reveal.js for presentations  -*- lexical-binding: t; -*-
 ;;
 ;; examples: 
 ;; https://github.com/yjwen/org-reveal

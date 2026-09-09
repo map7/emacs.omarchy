@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (setq 4gl-keywords
 	  `(
 

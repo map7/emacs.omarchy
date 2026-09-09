@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (use-package async
   :init
   (async-bytecomp-package-mode 1)  ;; Compile packages in the background.

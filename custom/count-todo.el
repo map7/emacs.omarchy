@@ -1,4 +1,4 @@
-;; 2021-My code to count todo items WIP
+;; 2021-My code to count todo items WIP  -*- lexical-binding: t; -*-
 ;;
 ;; https://github.com/jwiegley/emacs-async
 (defun get-date()

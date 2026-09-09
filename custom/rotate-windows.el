@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 (defun rotate-windows ()
   "Rotate your windows"
   (interactive)

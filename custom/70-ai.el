@@ -1,4 +1,4 @@
-;; March, 2026 - Claude Code Integration
+;; March, 2026 - Claude Code Integration  -*- lexical-binding: t; -*-
 
 ;; install required inheritenv dependency:
 (use-package inheritenv
