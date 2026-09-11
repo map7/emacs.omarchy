@@ -277,7 +277,7 @@ Opens a browser; user pastes the redirected URL back into Emacs."
            (seen   (if params
                        (mapconcat #'car params ", ")
                      "none — what you pasted had no query string at all")))
-      (when-let ((err (cdr (assoc "error" params))))
+      (when-let* ((err (cdr (assoc "error" params))))
         (user-error "Intuit refused the authorization: %s %s" err
                     (or (cdr (assoc "error_description" params)) "")))
       (unless code  (user-error "No `code' in the pasted URL. Parameters seen: %s" seen))
