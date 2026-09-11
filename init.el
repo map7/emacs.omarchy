@@ -62,9 +62,10 @@
 (use-package picpocket :bind ("M-p" . picpocket))
 (use-package sudo-edit)
 (use-package switch-window)
-(use-package vterm)
+;; Deferred: loading vterm eagerly prompts to compile `vterm-module' at
+;; startup, which blocks a daemon start.  Load it on first use instead.
+(use-package vterm :defer t :commands (vterm vterm-other-window))
 (use-package tramp-term)
-(use-package twittering-mode)
 (use-package restclient)
 (use-package xkcd)
 (use-package dockerfile-mode)
@@ -94,7 +95,6 @@
 
 ;; Ruby related
 (use-package enh-ruby-mode)
-(use-package goto-gem)
 (use-package ruby-refactor)
 
 ;; Org related
@@ -205,16 +205,17 @@
 (add-to-list 'default-frame-alist '(width . 150))
 
 ;;;; Optional/conditional loads
-(when-let ((f (expand-file-name ".emacs.autostart.el" user-emacs-directory)))
+(let ((f (expand-file-name ".emacs.autostart.el" user-emacs-directory)))
   (when (file-exists-p f) (load f)))
 
-(when-let ((f (expand-file-name ".emacs.paradox.el" user-emacs-directory)))
+(let ((f (expand-file-name ".emacs.paradox.el" user-emacs-directory)))
   (when (file-exists-p f) (load f)))
 
-(when-let ((f (expand-file-name ".emacs.workspace.el" user-emacs-directory)))
+(let ((f (expand-file-name ".emacs.workspace.el" user-emacs-directory)))
   (when (file-exists-p f) (load f)))
 
-(load (expand-file-name ".emacs.custom.el" user-emacs-directory))
+(let ((f (expand-file-name ".emacs.custom.el" user-emacs-directory)))
+  (when (file-exists-p f) (load f)))
 
 ;;;; Misc
 (put 'downcase-region 'disabled nil)
