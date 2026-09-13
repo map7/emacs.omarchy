@@ -22,19 +22,34 @@ devices over mDNS.")
 (defvar arduino-tcp-port "3232"
   "TCP port for OTA uploads.")
 
+(defvar arduino-ota-host-port "3233"
+  "Fixed TCP port espota listens on for the device to connect back.
+
+After the UDP invitation the device opens a NEW inbound connection to this
+machine.  espota otherwise picks a random port in 10000-60000, which a host
+firewall cannot be told about in advance; pinning it means one narrow rule
+covers OTA.  Must be open for the LAN, e.g.
+
+    sudo ufw allow from 10.1.1.0/24 to any port 3233 proto tcp")
+
 (defvar arduino-espota-script nil
   "Path to espota.py for ESP32 OTA uploads.
 Nil autodetects the newest installed esp32 core, so the path does not go
 stale when the core is upgraded.")
 
 (defun arduino--espota-script ()
-  "Return the path to espota.py, honouring `arduino-espota-script' when set."
-  (or (and arduino-espota-script (expand-file-name arduino-espota-script))
-      (car (last (sort (file-expand-wildcards
-                        (expand-file-name
-                         "~/.arduino15/packages/esp32/hardware/esp32/*/tools/espota.py"))
-                       #'string-version-lessp)))
-      (user-error "espota.py not found - set `arduino-espota-script'")))
+  "Return the path to espota.py, honouring `arduino-espota-script' when set.
+A configured path that no longer exists falls back to autodetection, so an
+upgraded core (or a stale value left in a long-running session by an earlier
+`defvar') heals itself rather than failing the upload."
+  (let ((configured (and arduino-espota-script
+                         (expand-file-name arduino-espota-script))))
+    (or (and configured (file-exists-p configured) configured)
+        (car (last (sort (file-expand-wildcards
+                          (expand-file-name
+                           "~/.arduino15/packages/esp32/hardware/esp32/*/tools/espota.py"))
+                         #'string-version-lessp)))
+        (user-error "espota.py not found - set `arduino-espota-script'"))))
 
 (defvar arduino-serial-port "/dev/ttyACM0"
   "Serial port for USB uploads and monitoring.")
@@ -211,13 +226,14 @@ Otherwise the target is `arduino-tcp-host' as before."
                          (directory-file-name default-directory)))
            (build-dir "build"))
       (message "Arduino: OTA to %s%s" host (if who (format " (owner %s)" who) ""))
-      (compile (format "arduino-cli compile -b %s%s --output-dir %s . && python3 %s -d -r -i %s -p %s -f %s/%s.ino.bin"
+      (compile (format "arduino-cli compile -b %s%s --output-dir %s . && python3 %s -d -r -i %s -p %s -P %s -f %s/%s.ino.bin"
                        (arduino--fqbn)
                        owner
                        build-dir
                        (arduino--espota-script)
                        host
                        arduino-tcp-port
+                       arduino-ota-host-port
                        build-dir
                        sketch-name))))
 
