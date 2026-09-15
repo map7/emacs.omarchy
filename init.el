@@ -40,6 +40,7 @@
   (load bootstrap-file nil 'nomessage))
 
 ;;;; Package declarations
+(use-package ghostel :ensure t)         ; better terminal can use btop in emacs now.
 (use-package transient)
 (use-package all-the-icons)
 (use-package ansible)
