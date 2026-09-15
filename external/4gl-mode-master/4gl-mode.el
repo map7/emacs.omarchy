@@ -377,12 +377,29 @@ Falls back to a site search for keywords not in the lookup table."
        (format "https://google.com/search?q=site:aubit4gl.sourceforge.net+Informix+4GL+%s"
                (url-hexify-string kw))))))
 
+(defvar 4gl-compile-command "zsh -ic p"
+  "Shell command `4gl-compile' runs in the directory of the current file.
+
+`p' is a zsh function defined in ~/.zshrc, not a program on PATH, so
+both halves of this matter: it has to be zsh, and it has to be an
+interactive shell, or the function is never defined.  Inside the
+pais_legacy sshfs mount `p' ssh's to the server and compiles the
+current program directory there (scripts/aubit_pais/compile, which
+runs compile_program in the docker-aubit4gl container).")
+
 (defun 4gl-compile ()
-  "Compile the current 4GL file by running `p' in its directory.
-Works over TRAMP — the command runs on the remote host."
+  "Compile the current 4GL program by running `p' in the file's directory.
+
+The source lives on an sshfs mount of the server, so the buffer is
+saved first - otherwise `p' compiles the last version the server
+actually has, not what is on screen."
   (interactive)
-  (let ((default-directory (file-name-directory (buffer-file-name))))
-    (compile "bash -ic p")))
+  (unless buffer-file-name
+    (user-error "Buffer is not visiting a file"))
+  (when (buffer-modified-p)
+    (save-buffer))
+  (let ((default-directory (file-name-directory buffer-file-name)))
+    (compile 4gl-compile-command)))
 
 (defun 4gl--electric-reindent ()
   "Reindent the current line after typing a dedent keyword like else or end."
