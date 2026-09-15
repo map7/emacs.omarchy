@@ -227,9 +227,11 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(bookmark-default-file "~/Sync/emacs-bookmarks")
+ ;; Images (jpg/jpeg/JPG/gif/bmp/png) are deliberately absent: with no
+ ;; entry here `dired-open-file' falls through to `dired-find-file', which
+ ;; opens them in image-mode inside Emacs rather than launching shotwell.
  '(dired-open-extensions
-   '(("jpg" . "shotwell") ("jpeg" . "shotwell") ("gif" . "shotwell")
-     ("bmp" . "shotwell") ("png" . "shotwell") ("wp" . "libreoffice")
+   '(("wp" . "libreoffice")
      ("ott" . "libreoffice") ("odt" . "libreoffice")
      ("odf" . "libreoffice") ("ods" . "libreoffice")
      ("ots" . "libreoffice") ("xcf" . "gimp") ("svg" . "inkscape")
@@ -238,8 +240,7 @@
      ("pub" . "libreoffice") ("odg" . "libreoffice")
      ("ppt" . "libreoffice") ("mp4" . "mplayer")
      ("netmap" . "java -jar ~/bin/jNetMap.jar $1")
-     ("glabels" . "glabels-3") ("abw" . "libreoffice")
-     ("JPG" . "shotwell")))
+     ("glabels" . "glabels-3") ("abw" . "libreoffice")))
  '(dired-open-functions '(dired-open-by-extension dired-open-subdir ignore))
  '(erc-modules
    '(autojoin button completion fill irccontrols list log match menu
