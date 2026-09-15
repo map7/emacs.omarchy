@@ -485,3 +485,31 @@ attachment: link, and previewed inline.  ARG is passed to `org-yank'."
   ;; (C-c C-y and C-c y are already taken by org-evaluate-time-range and
   ;; youtube-music; s-v never reaches Emacs because Hyprland grabs SUPER+V.)
   (define-key org-mode-map (kbd "C-c C-M-y") #'yank-media))
+
+;; Inline images are capped at `fill-column' wide, which shrinks most pasted
+;; screenshots. Show them 50% wider than that.
+;;
+;; `org-image-max-width' only understands the symbol `fill-column' or a pixel
+;; count, so the column target has to be converted using the frame's char
+;; width. It must be a *graphical* frame: the daemon's own terminal frame
+;; reports a char width of 1, so using the selected frame would cap images at
+;; ~105px whenever a file is opened with no GUI frame selected (during an
+;; agenda scan, say). When no graphical frame exists we leave the default
+;; alone rather than guess.
+;;
+;; This only takes effect because `org-image-actual-width' is t; a #+ATTR_ORG
+;; :width on an individual image still wins.
+(defconst my/org-image-width-scale 1.5
+  "Inline image width cap, as a multiple of `fill-column'.")
+
+(defun my/org-image-max-width ()
+  "Pixel width cap for inline images, or nil with no graphical frame."
+  (when-let* ((frame (seq-find #'display-graphic-p (frame-list))))
+    (round (* my/org-image-width-scale fill-column (frame-char-width frame)))))
+
+(defun my/org-set-image-max-width ()
+  "Widen this buffer's inline image cap to `my/org-image-width-scale'."
+  (when-let* ((px (my/org-image-max-width)))
+    (setq-local org-image-max-width px)))
+
+(add-hook 'org-mode-hook #'my/org-set-image-max-width)
