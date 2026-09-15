@@ -424,3 +424,64 @@ Includes :CREATED: property if present and sorts the table by it."
       (org-mode)
       (org-table-align)
       (display-buffer (current-buffer)))))
+
+;; Paste an image from the clipboard into the org file at point.
+;;
+;; Most of this already ships with Org 9.8: org-mode registers a `yank-media'
+;; handler for "image/.*", and `org-yank-image-save-method' defaults to
+;; `attach', so a pasted image is written into the entry's org-attach store
+;; (data/<id>/) and an attachment: link is inserted at point. What was
+;; missing is a key bound to `yank-media', plus the two fixes below.
+;;
+;; Flow: SUPER+V picks the image out of the omarchy clipboard history, then
+;; C-y in the org buffer attaches it and shows it inline.
+;;
+;; C-y stays correct for ordinary text: `yank-media' signals a user-error
+;; when nothing on the clipboard matches a handler, and we fall back to
+;; `org-yank'. Besides images, org's handlers also cover LibreOffice cells
+;; and files copied from a file manager, so those get attached too.
+
+(defun my/org-undescribe-image-links (beg end)
+  "Strip the description from image links between BEG and END.
+`org-link-preview-region' only previews a link that has no description,
+but `org--image-yank-media-handler' inserts the filename as one, giving
+[[attachment:foo.png][foo.png]].  Dropping the redundant description is
+what makes the image render - both right after pasting and on reopening
+the file, since `org-startup-with-link-previews' is on."
+  (require 'image-file)
+  (save-excursion
+    (goto-char beg)
+    (while (re-search-forward org-link-bracket-re end t)
+      (let ((path (match-string-no-properties 1))
+            (desc (match-string-no-properties 2)))
+        (when (and desc
+                   (string-match-p "\\`\\(?:attachment\\|file\\):" path)
+                   (member (downcase (or (file-name-extension path) ""))
+                           image-file-name-extensions))
+          (replace-match (org-link-make-string path) t t))))))
+
+(defun my/org-yank-media-or-yank (&optional arg)
+  "Paste clipboard media at point, falling back to `org-yank'.
+An image is saved into this entry's org-attach directory, linked with an
+attachment: link, and previewed inline.  ARG is passed to `org-yank'."
+  (interactive "P")
+  (let ((beg (copy-marker (point) nil))
+        (end (copy-marker (point) t)))
+    (unwind-protect
+        (if (condition-case nil
+                (progn (yank-media) t)
+              (user-error nil))
+            (progn
+              (my/org-undescribe-image-links beg end)
+              (when (display-graphic-p)
+                (org-link-preview-region nil t beg end)))
+          (org-yank arg))
+      (set-marker beg nil)
+      (set-marker end nil))))
+
+(with-eval-after-load 'org
+  (define-key org-mode-map (kbd "C-y") #'my/org-yank-media-or-yank)
+  ;; Unconditional media paste, for when C-y guessed wrong.
+  ;; (C-c C-y and C-c y are already taken by org-evaluate-time-range and
+  ;; youtube-music; s-v never reaches Emacs because Hyprland grabs SUPER+V.)
+  (define-key org-mode-map (kbd "C-c C-M-y") #'yank-media))
