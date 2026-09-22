@@ -127,6 +127,7 @@
 (load "11-eshell.el")
 (load "12-projectile.el")
 (load "15-winner-mode.el")
+(load "16-browse-url.el")
 (load "17-emacs-server.el")
 (load "18-flyspell.el")
 (load "22-epa-file.el")
