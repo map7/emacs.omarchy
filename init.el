@@ -85,12 +85,6 @@
   (setq epa-pinentry-mode 'loopback))
 (use-package pass)
 
-;; AI
-(use-package claude-code
-  :vc (:url "https://github.com/stevemolitor/claude-code.el"
-       :rev :newest
-       :branch "main"))
-
 ;; Other langs
 (use-package php-mode)
 
@@ -548,8 +542,7 @@
                       circe bpr ansible))
  '(package-vc-selected-packages
    '((youtube-music :url "https://github.com/emacsmirror/youtube-music")
-     (claude-code :url
-                  "https://github.com/stevemolitor/claude-code.el")))
+     (ecc :url "https://github.com/wakamenod/emacs-claude-code")))
  '(paperless-capture-directory "~/paperless/upload")
  '(paperless-root-directory "~/paperless/documents")
  '(paradox-automatically-star t)
