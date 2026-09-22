@@ -3,10 +3,25 @@
 
 (setq read-process-output-max (* 1024 1024)) ;; 1mb
 
-(setq file-name-handler-alist-original file-name-handler-alist) ; Save original
-(setq file-name-handler-alist nil)
+;; Save the original handlers once.  `defvar' so that re-loading this
+;; file (M-x reload-config, eval-buffer on init.el) can't overwrite the
+;; saved copy with an already-emptied list.
+(defvar file-name-handler-alist-original file-name-handler-alist
+  "Value of `file-name-handler-alist' before startup disabled it.")
 
-;; restore after startup
-(add-hook 'after-init-hook #'(lambda ()
-                               (setq gc-cons-threshold 800000)
-                               (setq file-name-handler-alist file-name-handler-alist-original)))
+(defun restore-file-name-handler-alist ()
+  "Put back the handlers disabled for startup speed.
+Appends rather than overwrites, so handlers registered while the list
+was empty (epa, tramp-archive) are kept."
+  (setq gc-cons-threshold 800000)
+  (setq file-name-handler-alist
+        (delete-dups (append file-name-handler-alist
+                             file-name-handler-alist-original))))
+
+(if after-init-time
+    ;; Re-loading the config in a running Emacs: there is no startup left
+    ;; to speed up, and `emacs-startup-hook' will never run again, so
+    ;; emptying the list here would permanently break TRAMP.
+    (restore-file-name-handler-alist)
+  (setq file-name-handler-alist nil)
+  (add-hook 'emacs-startup-hook #'restore-file-name-handler-alist))
