@@ -1,111 +1,48 @@
-;; March, 2026 - Claude Code Integration  -*- lexical-binding: t; -*-
+;; September, 2026 - Claude Code in Emacs, via ecc  -*- lexical-binding: t; -*-
+;; https://github.com/wakamenod/emacs-claude-code
+;;
+;; Swapped over from claude-code.el + monet.  That pair ran the CLI's own TUI
+;; inside an eat terminal, which is where the scroll-anchoring advice and the
+;; single-window PTY workaround came from.  ecc speaks the CLI's stream-json
+;; protocol in headless mode and renders the session into ordinary Emacs
+;; buffers, so there is no terminal emulator and none of that is needed.
+;;
+;; M-x ecc-start in a project.  C-c C-c sends, RET is a line break, C-c C-a
+;; and C-c C-d allow or deny a tool request from any buffer, C-c ? is the menu.
 
-;; install required inheritenv dependency:
-(use-package inheritenv
-  :vc (:url "https://github.com/purcell/inheritenv" :rev :newest))
+;; posframe backs the usage and side-query popups.  markdown-mode, for the
+;; plan and review buffers, already comes from 23-markdown.el.
+(use-package posframe)
 
-;; for eat terminal backend:
-(use-package eat :ensure t)
 
-;; for vterm terminal backend:
-(use-package vterm :ensure t :defer t :commands (vterm vterm-other-window))
+;; ~/.zshenv exports ANTHROPIC_API_KEY.  The daemon starts from systemd and
+;; never sees it, but an Emacs started from a shell does, and the CLI then
+;; runs on that key (`subscriptionType: null') instead of the claude.ai Max
+;; account.  Nothing else in this config reads it.  M-x ecc-auth-show-status
+;; reports which account a session would use.
+(setenv "ANTHROPIC_API_KEY" nil)
 
-;; install claude-code.el
-(use-package monet
-  :vc (:url "https://github.com/stevemolitor/monet"
-       :rev :newest))
-
-(use-package claude-code
-  :vc (:url "https://github.com/stevemolitor/claude-code.el"
-       :rev :newest)
-  :after monet
-  :config
-  (add-hook 'claude-code-process-environment-functions
-            #'monet-start-server-function)
-  (setq claude-code-display-window-fn #'claude-code-display-buffer-right)
-  ;; Disable the window-resize "optimization": it tracks window widths in a
-  ;; hash table to skip terminal resize signals, but that gets out of sync when
-  ;; splitting/unsplitting windows, leaving the eat buffer with garbled,
-  ;; overlapping text. Its own docstring says to set this nil if you hit display
-  ;; issues after window resizing.
-  (setq claude-code-optimize-window-resize nil)
-  (setq claude-code-program-switches '("--channels" "plugin:telegram@claude-plugins-official"))
-  (monet-mode 1)
-  (claude-code-mode)
-  :bind-keymap ("C-c c" . claude-code-command-map)
+(use-package ecc
+  :vc (:url "https://github.com/wakamenod/emacs-claude-code" :rev :newest)
+  :bind-keymap ("C-c c" . ecc-global-map)
+  :init
+  ;; What claude-code.el passed as `claude-code-program-switches'.
+  ;; `ecc-extra-args' is appended to every CLI invocation.
+  (setq ecc-extra-args '("--channels" "plugin:telegram@claude-plugins-official"))
+  :custom
+  ;; Side-by-side review of everything a session changed.
+  (ecc-review-style 'ediff)
+  (ecc-notify-level 'pulse)
+  (ecc-usage-display 'posframe)
+  (ecc-btw-display 'posframe)
+  (ecc-prompt-suggestions-enabled t)
+  ;; The Emacs MCP server: xref, imenu and flymake.  This is the job monet
+  ;; did for claude-code.el.
+  (ecc-mcp-enabled t)
+  ;; `ecc-permission-mode' left at its default on purpose: ecc asks, and
+  ;; answering from any buffer is the point of the swap.  Set it to "auto"
+  ;; here if the asking gets old.
   )
-
-(defun my/claude-code-eat-keep-at-bottom (windows)
-  "Keep Claude buffer scrolled to the bottom during output.
-WINDOWS is a list of windows or the symbol `buffer'.
-
-Anchors the prompt 4 lines from the bottom of the window.  Unlike the
-naive version this skips windows in `eat-emacs-mode' (read-only) so it
-doesn't yank point around while you're selecting or copying text, and
-only re-anchors when the cursor is at/near the end of the buffer so
-scrolling back through history isn't interrupted by new output."
-  (dolist (window windows)
-    (if (eq window 'buffer)
-        (goto-char (eat-term-display-cursor eat-terminal))
-      ;; Don't move point when in eat-emacs-mode (read-only browsing).
-      (when (not buffer-read-only)
-        (let ((cursor-pos (eat-term-display-cursor eat-terminal)))
-          (set-window-point window cursor-pos)
-          ;; Only re-anchor to the bottom when the cursor is at/near the
-          ;; end, or has scrolled out of view; otherwise leave the user's
-          ;; scroll position alone.
-          (when (or (>= cursor-pos (- (point-max) 2))
-                    (not (pos-visible-in-window-p cursor-pos window)))
-            (with-selected-window window
-              (goto-char cursor-pos)
-              (recenter -4))))))))
-
-(advice-add 'claude-code--eat-synchronize-scroll :override #'my/claude-code-eat-keep-at-bottom)
-
-(defun claude-code-display-buffer-right (buffer)
-  "Display the Claude Code BUFFER to the right of the current window.
-If a window already exists to the right, reuse it instead of splitting."
-  (let ((right-window (window-in-direction 'right)))
-    (if right-window
-        (window--display-buffer buffer right-window 'reuse nil)
-      (display-buffer buffer '((display-buffer-in-direction)
-                               (direction . right)
-                               (window-width . 0.5))))))
-
-(defun my/claude-code-buffer-p (buffer)
-  "Return non-nil if BUFFER is a Claude Code eat terminal buffer."
-  (and (buffer-live-p buffer)
-       (string-match-p "\\*claude" (buffer-name buffer))))
-
-(defun my/claude-code-ensure-single-window (&optional _frame)
-  "Ensure each Claude Code buffer is shown in at most one window.
-Eat resizes its PTY to the smallest window showing the buffer, so a TUI
-displayed in multiple windows of different widths renders garbled output."
-  (dolist (buffer (buffer-list))
-    (when (my/claude-code-buffer-p buffer)
-      (let ((windows (get-buffer-window-list buffer nil t)))
-        (when (> (length windows) 1)
-          (dolist (win (cdr windows))
-            (with-selected-window win
-              (switch-to-buffer (other-buffer buffer t) nil t))))))))
-
-(add-hook 'window-configuration-change-hook
-          #'my/claude-code-ensure-single-window)
-
-
-;; (use-package claude-code :ensure t
-;;   :vc (:url "https://github.com/stevemolitor/claude-code.el" :rev :newest)
-;;   :config
-;;   ;; optional IDE integration with Monet
-;;   (add-hook 'claude-code-process-environment-functions #'monet-start-server-function)
-;;   (monet-mode 1)
-
-;;   (claude-code-mode)
-;;   :bind-keymap ("C-c c" . claude-code-command-map)
-
-;;   ;; Optionally define a repeat map so that "M" will cycle thru Claude auto-accept/plan/confirm modes after invoking claude-code-cycle-mode / C-c M.
-;;   :bind
-;;   (:repeat-map my-claude-code-map ("M" . claude-code-cycle-mode)))
 
 ;; --------------------------------------------------------------------------------
 ;; c3po was the first interaction I got with ChatGPT in Emacs
