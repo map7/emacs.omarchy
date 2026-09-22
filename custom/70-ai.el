@@ -8,7 +8,7 @@
 (use-package eat :ensure t)
 
 ;; for vterm terminal backend:
-(use-package vterm :ensure t)
+(use-package vterm :ensure t :defer t :commands (vterm vterm-other-window))
 
 ;; install claude-code.el
 (use-package monet
