@@ -46,6 +46,9 @@ straight
 /request/
 /edraw-ui-state.config
 
+# Google OAuth tokens for gdocs - never commit
+/gdocs/
+
 # QBO OAuth tokens — never commit
 .invoice-qbo-tokens.el
 
