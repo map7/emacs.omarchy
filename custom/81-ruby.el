@@ -107,7 +107,31 @@ Run interactively after switching mise ruby versions."
   :config
   (add-to-list 'company-backends 'company-inf-ruby))
 
+;; Completion after a dot.  `Asset.w' is a one-character prefix, and company
+;; only starts on its own at `company-minimum-prefix-length', 3 by default, so
+;; typing past the dot faster than `company-idle-delay' and then pausing showed
+;; nothing at all.  One character is enough in Ruby, where most of what you
+;; want is a method on the thing before the dot.
+(defun my/ruby-company-prefix-length ()
+  "Let company start after a single character in Ruby buffers."
+  (setq-local company-minimum-prefix-length 1))
+
+(dolist (hook '(enh-ruby-mode-hook ruby-mode-hook ruby-ts-mode-hook))
+  (add-hook hook #'my/ruby-company-prefix-length))
+
 ;; Solargraph LSP for Ruby (go-to-definition, completion, docs, diagnostics)
+;;
+;; The Rails query methods (`where', `order', `limit', `pluck' and the rest of
+;; ActiveRecord::Querying::QUERYING_METHODS) are installed at runtime by
+;;
+;;     delegate(*QUERYING_METHODS, to: :all)
+;;
+;; so there is no `def where' anywhere for a static indexer to find, and
+;; solargraph alone never offers them.  The solargraph-rails plugin generates
+;; those pins, typed to return a relation of the model class.  It is turned on
+;; globally in ~/.config/solargraph/config.yml and the gem is installed into
+;; whichever mise ruby runs solargraph, so a new ruby version needs
+;; `gem install solargraph-rails' again.
 (require 'cl-lib)
 (require 'eglot)
 (let ((solargraph (my/mise-bin "solargraph")))
