@@ -129,9 +129,10 @@ Run interactively after switching mise ruby versions."
 ;; so there is no `def where' anywhere for a static indexer to find, and
 ;; solargraph alone never offers them.  The solargraph-rails plugin generates
 ;; those pins, typed to return a relation of the model class.  It is turned on
-;; globally in ~/.config/solargraph/config.yml and the gem is installed into
-;; whichever mise ruby runs solargraph, so a new ruby version needs
-;; `gem install solargraph-rails' again.
+;; globally in ~/.config/solargraph/config.yml.  solargraph runs under the
+;; ruby of the project it is indexing, so the gem has to exist in each of
+;; them; ~/.default-gems lists it alongside solargraph and rubocop, which
+;; covers every ruby mise installs from here on.
 (require 'cl-lib)
 (require 'eglot)
 (let ((solargraph (my/mise-bin "solargraph")))
