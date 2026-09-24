@@ -193,3 +193,45 @@ hand instead."
     (remove-function after-focus-change-function #'my/gdocs--on-focus-change)))
 
 (my/gdocs-auto-pull-mode 1)
+
+
+;;;; Keep imported tables aligned
+;;
+;; Google Docs tables arrive as valid but ragged org: the cells are right,
+;; the pipes do not line up, and the rule row is a stub like |---+---+---|.
+;; Org fixes that on TAB, so do it on the way in rather than by hand.
+;;
+;; Safe with respect to pushing: `org-table-align' only pads cells, which
+;; the org parser trims, so the IR is byte-identical before and after.
+;; Both install paths set their shadow copy from the buffer, and the
+;; shadow is compared by content keys, so alignment produces no diff.
+
+(defcustom my/gdocs-align-tables t
+  "When non-nil, align org tables after importing or pulling a doc."
+  :type 'boolean
+  :group 'gdocs)
+
+(defun my/gdocs--align-tables (&rest _)
+  "Align every org table in the current buffer, keeping the file in step."
+  (when (and my/gdocs-align-tables
+             (derived-mode-p 'org-mode)
+             (bound-and-true-p gdocs-sync--document-id))
+    (let ((was-modified (buffer-modified-p))
+          (inhibit-message t))
+      (save-excursion
+        (org-table-map-tables #'org-table-align t))
+      ;; Both callers save before this advice runs, so write the alignment
+      ;; out too.  Only when alignment is the sole change: an already
+      ;; modified buffer holds edits that are the user's to save.
+      (when (and buffer-file-name
+                 (buffer-modified-p)
+                 (not was-modified))
+        (let ((gdocs-auto-push-on-save nil)
+              (before-save-hook nil)
+              (after-save-hook nil))
+          (save-buffer))))))
+
+;; `gdocs--open-document-from-json' is the first import, and
+;; `gdocs-sync--install-content' is every pull and merge afterwards.
+(advice-add 'gdocs--open-document-from-json :after #'my/gdocs--align-tables)
+(advice-add 'gdocs-sync--install-content :after #'my/gdocs--align-tables)
