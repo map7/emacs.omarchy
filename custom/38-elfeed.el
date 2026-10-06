@@ -6,7 +6,7 @@
   :bind ("C-x w" . elfeed)
   :config
   (setq elfeed-feeds
-        '(;; Podcasts - Accounting
+        `(;; Podcasts - Accounting
           ("https://rss.buzzsprout.com/1761225.rss" podcast accounting)
 
           ;; Podcasts - Programming / Ruby
@@ -20,6 +20,14 @@
           ("https://changelog.com/podcast/feed" podcast tech)                                            ; The Changelog
           ("https://feed.syntax.fm/rss" podcast tech webdev)                                             ; Syntax
           ("https://feeds.transistor.fm/practical-ai-machine-learning-data-science-llm" podcast tech ai) ; Practical AI
+
+          ;; Triple R stopped publishing Byte Into IT as a podcast in Feb 2025,
+          ;; but the show continues and the episodes stay on their site.
+          ;; `rrr-feed' rebuilds a feed from the episode pages, with the
+          ;; on-demand HLS stream as the enclosure.  rrr-feed.timer refreshes
+          ;; it daily.  Absolute path, because file:// does not expand ~.
+          (,(concat "file://" (expand-file-name "~/.local/share/rrr-feeds/byte-into-it.xml"))
+           podcast tech)                                                                            ; Byte Into IT
 
           ;; Podcasts - Linux / Self-hosting
           ("https://feeds.jupiterbroadcasting.com/lup" podcast linux)                                    ; LINUX Unplugged
@@ -110,26 +118,45 @@
   (when (file-exists-p my/mpv-socket)
     (delete-file my/mpv-socket)))
 
+(defun my/elfeed--sanitize (name)
+  "Strip NAME down to something safe for a filename."
+  (replace-regexp-in-string "[^a-zA-Z0-9 _-]" "" name))
+
 (defun my/elfeed-download-enclosure ()
-  "Download the first enclosure of the current elfeed entry."
+  "Download the first enclosure of the current elfeed entry.
+Ordinary files go to wget, which can resume.  An HLS playlist has no
+single file to fetch, so those go to ffmpeg instead, which stitches the
+segments and copies the AAC through without re-encoding.  Triple R serves
+the rrr-feed podcasts that way."
   (interactive)
   (let* ((entry (if (eq major-mode 'elfeed-show-mode)
                     elfeed-show-entry
                   (elfeed-search-selected :single)))
          (enclosures (elfeed-entry-enclosures entry)))
-    (if enclosures
-        (let* ((url (caar enclosures))
-               (feed (elfeed-entry-feed entry))
-               (feed-title (elfeed-feed-title feed))
-               (dir (expand-file-name
-                     (replace-regexp-in-string "[^a-zA-Z0-9 _-]" "" feed-title)
-                     elfeed-enclosure-default-dir)))
-          (unless (file-directory-p dir)
-            (make-directory dir t))
-          (let ((default-directory dir))
-            (start-process "wget" "*elfeed-download*" "wget" "-c" url))
-          (message "Downloading to %s" dir))
-      (message "No enclosures found."))))
+    (if (not enclosures)
+        (message "No enclosures found.")
+      (let* ((url (caar enclosures))
+             (feed (elfeed-entry-feed entry))
+             (dir (expand-file-name
+                   (my/elfeed--sanitize (elfeed-feed-title feed))
+                   elfeed-enclosure-default-dir))
+             (hls (string-match-p "\\.m3u8\\(\\?\\|$\\)" url)))
+        (unless (file-directory-p dir)
+          (make-directory dir t))
+        (let ((default-directory dir))
+          (if hls
+              (let ((out (concat (my/elfeed--sanitize
+                                  (or (elfeed-entry-title entry) "episode"))
+                                 ".m4a")))
+                (if (file-exists-p (expand-file-name out dir))
+                    (message "Already downloaded: %s" out)
+                  (start-process "ffmpeg" "*elfeed-download*" "ffmpeg"
+                                 "-nostdin" "-loglevel" "warning"
+                                 "-i" url "-c" "copy" "-bsf:a" "aac_adtstoasc"
+                                 out)
+                  (message "Downloading (HLS) to %s/%s" dir out)))
+            (start-process "wget" "*elfeed-download*" "wget" "-c" url)
+            (message "Downloading to %s" dir)))))))
 
 (with-eval-after-load 'elfeed-search
   (define-key elfeed-search-mode-map (kbd "P") #'my/elfeed-play-enclosure-mpv)
