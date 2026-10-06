@@ -28,6 +28,11 @@
           ;; it daily.  Absolute path, because file:// does not expand ~.
           (,(concat "file://" (expand-file-name "~/.local/share/rrr-feeds/byte-into-it.xml"))
            podcast tech)                                                                            ; Byte Into IT
+          ;; The station's own feed stopped on 6 Feb 2025 but is still served,
+          ;; and its 338 enclosures are real mp3s on S3, so it still carries the
+          ;; whole back catalogue.  Between the two there is a gap from Feb 2025
+          ;; to the start of RRR's on-demand window, which has audio nowhere.
+          ("https://www.rrr.org.au/explore/podcasts/byte-into-it/feed.xml" podcast tech archive)    ; Byte Into IT (archive)
 
           ;; Podcasts - Linux / Self-hosting
           ("https://feeds.jupiterbroadcasting.com/lup" podcast linux)                                    ; LINUX Unplugged
