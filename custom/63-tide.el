@@ -15,6 +15,17 @@
     (add-to-list 'exec-path mise-node-bin)
     (setenv "PATH" (concat mise-node-bin ":" (getenv "PATH")))))
 
+;; Add npm's global bin to exec-path.  `exec-path-from-shell' above copies PATH
+;; out of a login zsh, and that PATH does not carry the npm prefix, so globally
+;; installed CLI tools - prettier, typescript-language-server,
+;; vue-language-server - were invisible to Emacs even though they were installed
+;; and on PATH in a terminal.
+(let ((npm-global-bin (expand-file-name "~/.npm-global/bin")))
+  (when (file-directory-p npm-global-bin)
+    (add-to-list 'exec-path npm-global-bin)
+    (unless (string-match-p (regexp-quote npm-global-bin) (or (getenv "PATH") ""))
+      (setenv "PATH" (concat npm-global-bin ":" (getenv "PATH"))))))
+
 ;; Tree-sitter TypeScript modes (Emacs 29+ commonly)
 (use-package typescript-ts-mode
   :mode (("\\.ts\\'"  . typescript-ts-mode)

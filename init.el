@@ -180,6 +180,7 @@
 (load "83-web-mode.el")
 (load "84-html-mode.el")
 (load "85-yaml_mode.el")
+(load "86-vue.el")
 (load "87-javascript.el")
 (load "88-arduino_mode.el")
 (load "89-python.el")
