@@ -127,17 +127,93 @@ Sketches with no owners therefore build exactly the command they did before."
       (format " --build-property compiler.cpp.extra_flags=-DOWNER=%s" owner)
     ""))
 
-(defun arduino--resolve-host (host)
-  "Resolve HOST to an IPv4 address over mDNS, falling back to HOST itself."
-  (if (not (and (string-suffix-p ".local" host)
-                (executable-find "avahi-resolve-host-name")))
-      host
+(defun arduino--ota-devices ()
+  "Return the OTA-capable devices on the LAN, found over mDNS.
+Each entry is a plist (:name NAME :hostname HOSTNAME :address IP).  An ESP32
+running ArduinoOTA advertises itself as `_arduino._tcp\='."
+  (when (executable-find "avahi-browse")
+    (let ((output (shell-command-to-string
+                   "avahi-browse -rtp _arduino._tcp 2>/dev/null"))
+          results)
+      (dolist (line (split-string output "\n" t))
+        ;; Resolved records start with "=" and are \=';\='-separated:
+        ;; =;iface;proto;name;type;domain;hostname;address;port;txt
+        (when (string-prefix-p "=" line)
+          (let* ((fields   (split-string line ";"))
+                 (proto    (nth 2 fields))
+                 (name     (nth 3 fields))
+                 (hostname (nth 6 fields))
+                 (addr     (nth 7 fields)))
+            (when (and (string= proto "IPv4") name addr
+                       (not (string-empty-p addr)))
+              (push (list :name name :hostname hostname :address addr)
+                    results)))))
+      (nreverse results))))
+
+(defun arduino--ota-device-alist (devices)
+  "Return DEVICES as an alist of (\"name (ip)\" . ip) for `completing-read\='."
+  (mapcar (lambda (d)
+            (cons (format "%s (%s)" (plist-get d :name) (plist-get d :address))
+                  (plist-get d :address)))
+          devices))
+
+(defun arduino--discover-ota ()
+  "Return alist of (\"name (ip)\" . ip) for ArduinoOTA devices on the LAN."
+  (unless (executable-find "avahi-browse")
+    (user-error "avahi-browse not found - install avahi-utils"))
+  (arduino--ota-device-alist (arduino--ota-devices)))
+
+(defun arduino--mdns-resolve (host)
+  "Return HOST\='s IPv4 address from mDNS, or nil when the name does not resolve."
+  (when (executable-find "avahi-resolve-host-name")
     (let ((out (shell-command-to-string
                 (format "avahi-resolve-host-name -4 %s 2>/dev/null"
                         (shell-quote-argument host)))))
-      (if (string-match "^[^ \t]+[ \t]+\\([0-9.]+\\)" out)
-          (match-string 1 out)
-        (user-error "Cannot resolve %s - is the device powered on?" host)))))
+      (when (string-match "^[^ \t]+[ \t]+\\([0-9.]+\\)" out)
+        (match-string 1 out)))))
+
+(defun arduino--rediscover-host (host)
+  "Find a device to upload to after HOST failed to resolve.
+Browses the LAN for OTA devices, since a board that does not answer to its
+name is usually still up and only the name lookup went missing.  A device
+advertising HOST\='s own name is taken straight away.  Anything else is offered
+for you to choose rather than picked automatically: `arduino-ota-host-format\='
+exists so one owner\='s build cannot land on another\='s board, and silently
+reassigning to whatever answered would undo that."
+  (let* ((devices (arduino--ota-devices))
+         (short (string-remove-suffix ".local" host))
+         (match (seq-find (lambda (d)
+                            (or (equal (plist-get d :hostname) host)
+                                (equal (plist-get d :name) short)))
+                          devices)))
+    (cond
+     (match
+      (let ((ip (plist-get match :address)))
+        (message "Arduino: %s did not resolve; found it on the LAN at %s" host ip)
+        ip))
+     (devices
+      (let* ((alist (arduino--ota-device-alist devices))
+             (choice (completing-read
+                      (format "%s not found - upload to which device? " host)
+                      alist nil t)))
+        (cdr (assoc choice alist))))
+     (t
+      (user-error "Cannot resolve %s, and no OTA devices answered on the LAN - is the device powered on?"
+                  host)))))
+
+(defun arduino--resolve-host (host)
+  "Resolve HOST to an IPv4 address for an OTA upload.
+A plain address or a non-mDNS name is used as given.  A .local name is looked
+up over mDNS, and if that comes back empty the LAN is browsed instead - see
+`arduino--rediscover-host\='."
+  (cond
+   ((not (string-suffix-p ".local" host)) host)
+   ;; No avahi tooling here: hand the name to espota and let the system try.
+   ((not (or (executable-find "avahi-resolve-host-name")
+             (executable-find "avahi-browse")))
+    host)
+   (t (or (arduino--mdns-resolve host)
+          (arduino--rediscover-host host)))))
 
 (use-package arduino-mode
   :mode "\\.ino\\'"
@@ -147,26 +223,6 @@ Sketches with no owners therefore build exactly the command they did before."
     (interactive "sArduino TCP host (e.g. 192.168.1.100): ")
     (setq arduino-tcp-host host)
     (message "Arduino TCP host set to %s:%s" host arduino-tcp-port))
-
-  (defun arduino--discover-ota ()
-    "Return alist of (\"name (ip)\" . ip) for ArduinoOTA devices on the LAN."
-    (unless (executable-find "avahi-browse")
-      (user-error "avahi-browse not found — install avahi-utils"))
-    (let ((output (shell-command-to-string
-                   "avahi-browse -rtp _arduino._tcp 2>/dev/null"))
-          results)
-      (dolist (line (split-string output "\n" t))
-        ;; Resolved records start with "=" and are ';'-separated:
-        ;; =;iface;proto;name;type;domain;hostname;address;port;txt
-        (when (string-prefix-p "=" line)
-          (let* ((fields (split-string line ";"))
-                 (proto  (nth 2 fields))
-                 (name   (nth 3 fields))
-                 (addr   (nth 7 fields)))
-            (when (and (string= proto "IPv4") name addr
-                       (not (string-empty-p addr)))
-              (push (cons (format "%s (%s)" name addr) addr) results)))))
-      (nreverse results)))
 
   (defun arduino-pick-tcp-host ()
     "Discover ArduinoOTA devices via mDNS and set `arduino-tcp-host'."
