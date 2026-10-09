@@ -250,7 +250,7 @@
  '(flycheck-ruby-rubocop-executable
    "/home/map7/.local/share/mise/installs/ruby/3.4.5/bin/rubocop")
  '(org-agenda-files
-   '("/home/map7/org/20130222.org"
+   '("/home/map7/org/#.org" "/home/map7/org/20130222.org"
      "/home/map7/org/Getting Started with Orgzly.org"
      "/home/map7/org/aad.org" "/home/map7/org/advice.org"
      "/home/map7/org/ai.org" "/home/map7/org/alchester.org"
@@ -359,6 +359,7 @@
      "/home/map7/org/business/michael/angular.org"
      "/home/map7/org/business/michael/ansible.org"
      "/home/map7/org/business/michael/asset_management.org"
+     "/home/map7/org/business/michael/assetfox.org"
      "/home/map7/org/business/michael/ato.org"
      "/home/map7/org/business/michael/backup.org"
      "/home/map7/org/business/michael/backup_gem.org"
@@ -367,6 +368,7 @@
      "/home/map7/org/business/michael/chris.org"
      "/home/map7/org/business/michael/cleantime.org"
      "/home/map7/org/business/michael/click3pl.org"
+     "/home/map7/org/business/michael/crm_fabulous_catering.org"
      "/home/map7/org/business/michael/dcre.org"
      "/home/map7/org/business/michael/digitech.org"
      "/home/map7/org/business/michael/digitech_website.org"
@@ -469,6 +471,7 @@
      "/home/map7/org/projects/arcade_machine.org"
      "/home/map7/org/projects/auto_cat_feeder.org"
      "/home/map7/org/projects/baby_monitor.org"
+     "/home/map7/org/projects/beer_measuring.org"
      "/home/map7/org/projects/bike_computer.org"
      "/home/map7/org/projects/blind_controller.org"
      "/home/map7/org/projects/bloodbowl_scoreboard.org"
@@ -537,11 +540,11 @@
                       org2blog org-clock-csv org-cliplink
                       org-attach-screenshot nlinum multiple-cursors
                       multi-term moe-theme markdown-mode magit
-                      linum-off js2-mode
-                      highlight-parentheses highlight-indentation
-                      haml-mode grizzl expand-region enh-ruby-mode
-                      diredful dired-details csv-mode coffee-mode
-                      circe bpr ansible))
+                      linum-off js2-mode highlight-parentheses
+                      highlight-indentation haml-mode grizzl
+                      expand-region enh-ruby-mode diredful
+                      dired-details csv-mode coffee-mode circe bpr
+                      ansible))
  '(package-vc-selected-packages
    '((youtube-music :url "https://github.com/emacsmirror/youtube-music")
      (ecc :url "https://github.com/wakamenod/emacs-claude-code")))
@@ -574,3 +577,9 @@
 (remove-hook 'before-save-hook #'delete-trailing-whitespace)
 
 ;;; init.el ends here
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
