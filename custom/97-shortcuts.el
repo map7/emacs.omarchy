@@ -97,10 +97,11 @@
 ;; find and replace
 (global-set-key (kbd "s-r") 'find-name-dired)
 
-;; Shift a region left or right.  This was s-<tab>, but Omarchy takes
-;; SUPER+TAB for "Next workspace" (and the SHIFT and CTRL variants for the
-;; previous and former one), so the key never reached Emacs.  s-= is free in
-;; both.  `indent-rigidly' is transient once started: left/right or TAB and
-;; S-TAB shift the region, RET or C-g finishes.  C-x TAB does the same thing
-;; and is the stock Emacs binding.
-(global-set-key (kbd "s-=") 'indent-rigidly)
+;; Shift a region left or right.  This was s-<tab> and then s-=, but
+;; Omarchy takes both: SUPER+TAB is "Next workspace" and SUPER+= (code:21)
+;; is "Shrink window left", so neither reached Emacs.  Plain SUPER+B is free
+;; in both, since Omarchy only binds B with SHIFT, ALT or CTRL added, and B
+;; sits just above the space bar.  `indent-rigidly' is transient once started:
+;; left/right or TAB and S-TAB shift the region, RET or C-g finishes.  C-x
+;; TAB does the same thing and is the stock Emacs binding.
+(global-set-key (kbd "s-b") 'indent-rigidly)
