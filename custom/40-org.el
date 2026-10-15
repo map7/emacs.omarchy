@@ -515,23 +515,28 @@ attachment: link, and previewed inline.  ARG is passed to `org-yank'."
 (add-hook 'org-mode-hook #'my/org-set-image-max-width)
 
 ;; Typing spaces in front of an inline image should move it right.  Org
-;; draws the image as an overlay over the link, and an overlay takes in text
-;; inserted at its start.  So the first space vanished under the image, the
-;; cursor got pushed out past the image, and the rest of the spaces landed
-;; at the end of the line, where `delete-trailing-whitespace' stripped them
-;; on save.  Sliding the overlay's start past anything typed in front of it
-;; keeps the spaces visible, the image moving, and the cursor before it.
-(defun my/org-image-overlay-stay-behind (ov after _beg end &optional _len)
-  "Move OV's start past text just inserted at its front."
-  (when after
-    (move-overlay ov end (overlay-end ov))))
+;; draws the image as an overlay over the link, and edits at the overlay's
+;; edges leave it in the wrong place: text typed at its start goes in under
+;; the image, and deleting text across its start drags it back onto the
+;; line above.  Once it covers that line's newline, the blank line above
+;; the image disappears and a cursor on it looks as if it sits before the
+;; image.  Spaces typed there are trailing whitespace on the hidden blank
+;; line, and `delete-trailing-whitespace' strips them on save.  After every
+;; edit near an image, put the overlay's start back on the link's "[[" so
+;; the spaces stay visible in front of the image and the cursor with them.
+(defun my/org-image-overlays-snap (beg end _len)
+  "Move image overlays near BEG..END back to start at their link."
+  (dolist (ov (overlays-in (max (point-min) (1- beg))
+                           (min (point-max) (1+ end))))
+    (when (memq ov org-link-preview-overlays)
+      (when-let* ((link (save-excursion
+                          (goto-char (overlay-start ov))
+                          (search-forward "[[" (overlay-end ov) t))))
+        (unless (= (- link 2) (overlay-start ov))
+          (move-overlay ov (- link 2) (overlay-end ov)))))))
 
-(defun my/org-image-overlays-stay-behind (&rest _)
-  "Make this buffer's link preview overlays let text in at their front."
-  (dolist (ov org-link-preview-overlays)
-    (overlay-put ov 'insert-in-front-hooks
-                 (list #'my/org-image-overlay-stay-behind))))
+(defun my/org-image-overlays-snap-setup ()
+  "Keep this buffer's image overlays on their links as it is edited."
+  (add-hook 'after-change-functions #'my/org-image-overlays-snap nil t))
 
-(with-eval-after-load 'ol
-  (advice-add 'org-link-preview-region :after
-              #'my/org-image-overlays-stay-behind))
+(add-hook 'org-mode-hook #'my/org-image-overlays-snap-setup)
