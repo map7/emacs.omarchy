@@ -9,4 +9,7 @@
 ;; image as one tall line, so the wheel jumped clean over org-mode pictures
 ;; and could never stop part way through one.  Mouse wheels are interpolated
 ;; into a smooth pixel scroll too (`pixel-scroll-precision-interpolate-mice').
+;; Each wheel click scrolls by the event's distance times this factor.  The
+;; default of 2.0 jumped too far, so 1.0 moves half as much per click.
+(setq pixel-scroll-precision-interpolation-factor 1.0)
 (pixel-scroll-precision-mode 1)
