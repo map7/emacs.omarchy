@@ -513,3 +513,25 @@ attachment: link, and previewed inline.  ARG is passed to `org-yank'."
     (setq-local org-image-max-width px)))
 
 (add-hook 'org-mode-hook #'my/org-set-image-max-width)
+
+;; Typing spaces in front of an inline image should move it right.  Org
+;; draws the image as an overlay over the link, and an overlay takes in text
+;; inserted at its start.  So the first space vanished under the image, the
+;; cursor got pushed out past the image, and the rest of the spaces landed
+;; at the end of the line, where `delete-trailing-whitespace' stripped them
+;; on save.  Sliding the overlay's start past anything typed in front of it
+;; keeps the spaces visible, the image moving, and the cursor before it.
+(defun my/org-image-overlay-stay-behind (ov after _beg end &optional _len)
+  "Move OV's start past text just inserted at its front."
+  (when after
+    (move-overlay ov end (overlay-end ov))))
+
+(defun my/org-image-overlays-stay-behind (&rest _)
+  "Make this buffer's link preview overlays let text in at their front."
+  (dolist (ov org-link-preview-overlays)
+    (overlay-put ov 'insert-in-front-hooks
+                 (list #'my/org-image-overlay-stay-behind))))
+
+(with-eval-after-load 'ol
+  (advice-add 'org-link-preview-region :after
+              #'my/org-image-overlays-stay-behind))
