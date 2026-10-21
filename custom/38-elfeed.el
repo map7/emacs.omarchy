@@ -9,6 +9,9 @@
         `(;; Podcasts - Accounting
           ("https://rss.buzzsprout.com/1761225.rss" podcast accounting)
 
+          ;; Podcasts - Finance
+          ("https://www.omnycontent.com/d/playlist/fa326977-3de5-4283-9b8b-af3500c58607/0c6189e6-78f6-4f47-b25d-af4600179991/1dc0ac03-61e1-486c-b9be-af460017999b/podcast.rss" podcast finance) ; She's On The Money
+
           ;; Podcasts - Programming / Ruby
           ("https://rss.buzzsprout.com/1878319.rss" podcast ruby)                                        ; Code with Jason
           ("https://www.spreaker.com/show/6102073/episodes/feed" podcast ruby)                           ; Ruby Rogues
