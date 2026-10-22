@@ -7,7 +7,7 @@
   :config
   (setq elfeed-feeds
         `(;; Podcasts - Accounting
-          ("https://rss.buzzsprout.com/1761225.rss" podcast accounting)
+          ("https://rss.buzzsprout.com/1761225.rss" podcast accounting)                                  ; Aly & Andrews All Aussie Accounting Adventures
 
           ;; Podcasts - Finance
           ("https://www.omnycontent.com/d/playlist/fa326977-3de5-4283-9b8b-af3500c58607/0c6189e6-78f6-4f47-b25d-af4600179991/1dc0ac03-61e1-486c-b9be-af460017999b/podcast.rss" podcast finance) ; She's On The Money
@@ -51,7 +51,8 @@
           ("https://theamphour.com/feed/podcast/" podcast electronics)                                   ; The Amp Hour
 
           ;; Podcasts - Other
-          ("https://evilgeniuschronicles.org/feed.xml" podcast)))                                        ; Evil Genius Chronicles
+          ("https://evilgeniuschronicles.org/feed.xml" podcast)                                          ; Evil Genius Chronicles
+          ))
 
   ;; Show entries from the last 2 weeks by default
   (setq elfeed-search-filter "@2-weeks-ago +unread")
