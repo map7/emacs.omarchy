@@ -162,6 +162,17 @@ clock out if a clock is running."
 ;; Display images inline automatically
 (setq org-startup-with-inline-images t)
 
+;; Play video file links in an mpv window.  `call-process' with a 0
+;; buffer detaches mpv, so it outlives Emacs and doesn't block it.
+(defun my/org-open-video-in-mpv (file _link)
+  "Play FILE in mpv."
+  (call-process "mpv" nil 0 nil "--force-window" (expand-file-name file)))
+
+(with-eval-after-load 'org
+  (add-to-list 'org-file-apps
+               '("\\.\\(?:mkv\\|mp4\\|webm\\|avi\\|mov\\|m4v\\|mpe?g\\|flv\\|wmv\\|ogv\\|ts\\)\\'"
+                 . my/org-open-video-in-mpv)))
+
 (defun org-clock-sum-agenda-today ()
   "Visit each file in `org-agenda-files' and return the total time of today's clocked tasks in minutes."
   (interactive)
