@@ -567,6 +567,10 @@
 ;; ~/.emacs.default/init.el if you ever want a face back.
 
 ;;;; Omarchy integration - theme, font, shell. Loaded last so it wins.
+;; omarchy-emacs only looks for omarchy-theme.el in ~/.config/emacs/themes,
+;; which this profile doesn't use. Point it at the packaged copy so theme
+;; fixes arrive with pacman upgrades.
+(add-to-list 'custom-theme-load-path "/usr/share/omarchy-emacs/config/themes")
 (load (expand-file-name "omarchy" user-emacs-directory))
 
 ;; omarchy.el puts `delete-trailing-whitespace' on before-save-hook globally.
