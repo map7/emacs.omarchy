@@ -2,7 +2,7 @@
 (use-package exec-path-from-shell
   :ensure t
   :init
-  (setq exec-path-from-shell-shell-name "zsh")
+  (setq exec-path-from-shell-shell-name (or (executable-find "zsh") (getenv "SHELL")))
   (setq exec-path-from-shell-arguments '("-l")) ;; login shell
   (exec-path-from-shell-initialize))
 
