@@ -22,6 +22,45 @@
 (delete-selection-mode 0)                 ; Selected text NOT will be overwritten when you start typing
 (global-auto-revert-mode t)               ; Auto-update buffer if file has changed on disk
 
+;; `electric-pair-mode' above moves a closing delimiter onto its own line when
+;; RET is pressed between a freshly typed pair, but nothing indents that line,
+;; so typing `else {' and hitting RET left the `}' in column 0:
+;;
+;;     if (a) {
+;;         |
+;;     }                          <- wanted
+;;     }                          <- what actually happened, column 0
+;;
+;; `electric-indent-mode' only reindents the line point is on, and the closer is
+;; a line further down.  Reindent it here instead.  Appended to the hook so it
+;; runs after electric-pair has inserted that line.
+(defun map7/reindent-closing-delimiter ()
+  "Indent a closing delimiter that RET pushed onto its own line."
+  ;; Deliberately not conditional on `electric-indent-mode': it is off in some
+  ;; code buffers here (js2-mode for one), and that is exactly where the closer
+  ;; was being left in column 0.  `electric-indent-inhibit' is still honoured,
+  ;; since modes that set it mean it.
+  (when (and (eq last-command-event ?\n)
+             (not electric-indent-inhibit)
+             ;; Only the blank line RET just opened.  electric-pair inserts a
+             ;; newline of its own, which runs this hook a second time with
+             ;; point on the closer itself - acting then would reindent the line
+             ;; below it, which is somebody else's brace.
+             (save-excursion
+               (beginning-of-line)
+               (looking-at-p "[[:blank:]]*$")))
+    (save-excursion
+      (forward-line 1)
+      (when (looking-at-p "[[:blank:]]*[]})]")
+        (indent-according-to-mode)))))
+
+(defun map7/enable-reindent-closing-delimiter ()
+  "Keep closing delimiters indented in this buffer."
+  (add-hook 'post-self-insert-hook #'map7/reindent-closing-delimiter t t))
+
+;; Code buffers only - in prose a line starting with a bracket is just prose.
+(add-hook 'prog-mode-hook #'map7/enable-reindent-closing-delimiter)
+
 ;; (add-hook 'before-save-hook
 ;; 	  'delete-trailing-whitespace)          ; Delete trailing whitespace on save
 
