@@ -1,6 +1,7 @@
 ;;; invoice_quickbooks.el --- Create QBO invoices from org-mode DONE items -*- lexical-binding: t; -*-
 
-;; Scans the current org buffer for DONE headings that have no tags,
+;; Scans the current org buffer for DONE headings that have no tags
+;; (other than :ATTACH:, which org-attach adds),
 ;; groups their CLOCK entries by day, and creates an invoice in
 ;; QuickBooks Online (Digitech Corporation) with one line per day at
 ;; $100/hr + 10% GST. The invoice is created but not sent.
@@ -739,6 +740,13 @@ ignored.  Zero padding on the highest number is preserved."
 ;;; -------------------------------------------------------------------
 ;;; Org parsing — untagged DONE items with clocks grouped by day
 
+(defun invoice-qbo--billing-tags (tags)
+  "Return TAGS minus the ones that say nothing about invoicing.
+`org-attach' adds `org-attach-auto-tag' (ATTACH) to any heading with
+a file attached; that must not hide the job from invoicing."
+  (let ((ignored (bound-and-true-p org-attach-auto-tag)))
+    (cl-remove-if (lambda (tg) (member tg (list "ATTACH" ignored))) tags)))
+
 (defun invoice-qbo--collect-tasks ()
   "Return list of plists (:title STR :assigned-date \"YYYY-MM-DD\"
 :minutes N :marker M) for every untagged DONE heading.  Total minutes
@@ -748,7 +756,8 @@ most recent clock-in.  Marker points at the heading start."
     (org-element-map (org-element-parse-buffer 'headline) 'headline
       (lambda (hl)
         (when (and (string= (org-element-property :todo-keyword hl) "DONE")
-                   (null (org-element-property :tags hl)))
+                   (null (invoice-qbo--billing-tags
+                          (org-element-property :tags hl))))
           (let ((title (org-element-property :raw-value hl))
                 (beg   (org-element-property :begin hl))
                 (end   (org-element-property :end hl))
@@ -1103,8 +1112,8 @@ these entries (they are no longer untagged)."
             (goto-char m)
             (when (and (org-at-heading-p)
                        (string= (org-get-todo-state) "DONE")
-                       (null (org-get-tags nil t)))
-              (org-set-tags (list tag))
+                       (null (invoice-qbo--billing-tags (org-get-tags nil t))))
+              (org-set-tags (append (org-get-tags nil t) (list tag)))
               (org-entry-put (point) "INVOICE_NUMBER" (format "%s" doc))
               (cl-incf count))))))
     (message "Tagged %d heading(s) with :%s:" count tag)))
